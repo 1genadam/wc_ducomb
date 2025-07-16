@@ -1,0 +1,44 @@
+# Fly.io configuration for Lazarus Home Remodeling
+app = "lazarus-home-remodeling"
+primary_region = "ord"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "80"
+
+# HTTP service configuration
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/"
+    port = 80
+    timeout = "10s"
+    type = "http"
+
+# Resource allocation
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "1gb"
+
+# Machine configuration
+[machine]
+  restart_policy = "on-failure"
+
+# Deploy configuration
+[deploy]
+  strategy = "rolling"
