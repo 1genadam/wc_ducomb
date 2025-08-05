@@ -1,0 +1,55 @@
+# WC Ducomb Inventory System with Tailscale VPN
+FROM python:3.11-slim
+
+# Install system dependencies including Tailscale
+RUN apt-get update && apt-get install -y \
+    s3270 \
+    gcc \
+    pkg-config \
+    curl \
+    wget \
+    nodejs \
+    npm \
+    procps \
+    bash \
+    iptables \
+    iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Tailscale
+RUN curl -fsSL https://tailscale.com/install.sh | sh
+
+# Set working directory
+WORKDIR /app
+
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy and install Node.js dependencies
+COPY package*.json ./
+RUN npm install --production
+
+# Copy application files
+COPY . .
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Create non-root user for security
+RUN groupadd -g 1001 inventory
+RUN useradd -r -u 1001 -g inventory inventory
+
+# Make scripts executable and fix ownership
+RUN chmod +x start.sh entrypoint.sh tailscale-start.sh
+RUN chown -R inventory:inventory /app
+
+# Expose ports
+EXPOSE 3000 5001
+
+# Health check for both services and VPN
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health && \
+      wget --no-verbose --tries=1 --spider http://localhost:5001/api/inventory/health || exit 1
+
+CMD ["./tailscale-start.sh"]

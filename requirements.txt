@@ -1,0 +1,24 @@
+# WC Ducomb Inventory Lookup API Requirements
+# Production-ready Python dependencies for 5250 protocol automation
+
+# Core 5250 Protocol Library
+p5250==0.1.0
+
+# Web Framework and API
+Flask==3.1.0
+Flask-CORS==4.0.0
+
+# Caching and Performance  
+redis==6.3.0
+
+# Testing Framework
+pytest==8.3.2
+pytest-mock==3.14.0
+
+# Additional Utilities
+python-dotenv==1.0.1
+
+# Development Dependencies (optional)
+# pytest-cov==5.0.0
+# black==24.8.0
+# flake8==7.1.1

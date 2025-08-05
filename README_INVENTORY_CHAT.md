@@ -2,15 +2,18 @@
 
 ## Overview
 
-This inventory lookup chat widget provides real-time access to inventory data via 5250 protocol automation, as documented in your successful proof of concept.
+Production-ready inventory lookup system with AI-powered chat interface providing real-time access to Infor Distribution A+ inventory data via 5250 protocol automation.
 
-## Features
+## ✨ Features
 
 - 🤖 **AI-powered chat interface** for natural inventory queries
-- 📊 **Real-time inventory lookup** via 5250 protocol
-- ✅ **Production-ready** based on proven Lazarus chat.js architecture
-- 🚀 **Fast response times** (~24 seconds for full lookup)
-- 📱 **Mobile-friendly** responsive design
+- 📊 **Real-time inventory lookup** via 5250 protocol automation
+- ⚡ **High performance** with Redis caching and connection pooling
+- 🛡️ **Production-ready** with comprehensive error handling and monitoring
+- 📊 **Admin dashboard** for system monitoring and management
+- 🔄 **Auto-retry logic** with exponential backoff for reliability
+- 📱 **Mobile-friendly** responsive design with Tailwind CSS
+- 🧪 **Comprehensive testing** with unit tests and integration tests
 
 ## Architecture
 
@@ -28,12 +31,16 @@ IBM i System (10.0.0.7) → Infor Distribution A+
 Live Inventory Database
 ```
 
-## Installation
+## 🚀 Quick Start
 
-### 1. Install Python Dependencies
+### 1. Install Dependencies
 
 ```bash
-pip install p5250 flask flask-cors
+# Python dependencies
+pip install -r requirements.txt
+
+# Node.js dependencies (for frontend server)
+npm install
 ```
 
 ### 2. Configure IBM i Credentials
@@ -41,26 +48,34 @@ pip install p5250 flask flask-cors
 Edit `api/inventory_lookup.py`:
 
 ```python
-IBM_HOST = "10.0.0.7"  # Your IBM i host
-USER = "your_username"  # Your username
-PASSWORD = "your_password"  # Your password
+IBM_HOST = "10.0.0.7"     # Your IBM i host
+USER = "ROBERT"           # Your IBM i username  
+PASSWORD = "TECH"         # Your IBM i password
 ```
 
-### 3. Start the Backend Service
+### 3. Start Services
 
 ```bash
+# Terminal 1: Start Python API backend
 python api/inventory_lookup.py
+
+# Terminal 2: Start Node.js frontend server  
+npm start
 ```
 
-The API will run on `http://localhost:5000`
+### 4. Access the Application
 
-### 4. Add Chat Widget to Your Pages
+- **Chat Widget Demo**: http://localhost:3000
+- **Admin Dashboard**: http://localhost:3000/admin
+- **API Documentation**: http://localhost:5000/api/inventory/status
 
-Add to any HTML page:
+### 5. Test with Live Data
 
-```html
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="/js/inventory-chat.js"></script>
+```bash
+# Test the API directly
+python test_live_api.py
+
+# Or test via chat widget with SKU: DGE037700
 ```
 
 ## Usage

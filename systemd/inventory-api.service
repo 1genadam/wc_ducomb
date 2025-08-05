@@ -1,0 +1,40 @@
+[Unit]
+Description=WC Ducomb Inventory Lookup API Service
+Documentation=https://github.com/1genadam/wc_ducomb
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=inventory
+Group=inventory
+WorkingDirectory=/opt/wc_ducomb
+Environment=PYTHONPATH=/opt/wc_ducomb
+Environment=FLASK_ENV=production
+Environment=FLASK_APP=api/inventory_lookup.py
+Environment=REDIS_URL=redis://localhost:6379/0
+ExecStart=/opt/wc_ducomb/venv/bin/python api/inventory_lookup.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=inventory-api
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wc_ducomb
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

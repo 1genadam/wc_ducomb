@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WC Ducomb Inventory System - Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-online { background-color: #10b981; }
+        .status-offline { background-color: #ef4444; }
+        .status-warning { background-color: #f59e0b; }
+        
+        .metric-card {
+            transition: transform 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .log-entry {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .refresh-btn {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white shadow-lg">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-2xl font-bold">WC Ducomb Inventory System</h1>
+                        <p class="text-blue-100">Admin Dashboard & Monitoring</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button id="refresh-all" class="bg-blue-500 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
+                            <i class="fas fa-sync-alt mr-2"></i>Refresh All
+                        </button>
+                        <div class="text-right">
+                            <div class="text-sm text-blue-100">Last Updated</div>
+                            <div id="last-updated" class="font-mono">--:--:--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="container mx-auto px-4 py-6">
+            <!-- System Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">System Status</p>
+                            <p id="system-status" class="text-xl font-bold">
+                                <span class="status-indicator status-offline"></span>Checking...
+                            </p>
+                        </div>
+                        <i class="fas fa-server text-3xl text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">IBM i Connection</p>
+                            <p id="ibm-connection" class="text-xl font-bold">
+                                <span class="status-indicator status-offline"></span>Disconnected
+                            </p>
+                        </div>
+                        <i class="fas fa-network-wired text-3xl text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Redis Cache</p>
+                            <p id="redis-status" class="text-xl font-bold">
+                                <span class="status-indicator status-offline"></span>Unavailable
+                            </p>
+                        </div>
+                        <i class="fas fa-database text-3xl text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Uptime</p>
+                            <p id="uptime" class="text-xl font-bold text-green-600">--</p>
+                        </div>
+                        <i class="fas fa-clock text-3xl text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Total Lookups</p>
+                            <p id="total-lookups" class="text-2xl font-bold text-blue-600">0</p>
+                        </div>
+                        <i class="fas fa-search text-2xl text-blue-400"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Success Rate</p>
+                            <p id="success-rate" class="text-2xl font-bold text-green-600">--%</p>
+                        </div>
+                        <i class="fas fa-check-circle text-2xl text-green-400"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Cache Hit Rate</p>
+                            <p id="cache-hit-rate" class="text-2xl font-bold text-purple-600">--%</p>
+                        </div>
+                        <i class="fas fa-tachometer-alt text-2xl text-purple-400"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-md p-6 metric-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-600 text-sm">Avg Response</p>
+                            <p id="avg-response" class="text-2xl font-bold text-orange-600">--ms</p>
+                        </div>
+                        <i class="fas fa-stopwatch text-2xl text-orange-400"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- SKU Lookup Test -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="bg-gray-50 px-6 py-4 border-b">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-vial mr-2 text-blue-500"></i>
+                            SKU Lookup Test
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Enter SKU to test:</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="test-sku" placeholder="e.g., DGE037700" 
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <button id="test-lookup" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-search mr-1"></i>Test
+                                </button>
+                            </div>
+                        </div>
+                        <div id="test-result" class="bg-gray-50 rounded-lg p-4 min-h-[200px] font-mono text-sm overflow-auto">
+                            <p class="text-gray-500">Enter a SKU and click Test to see results...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Lookups -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-history mr-2 text-green-500"></i>
+                            Recent Lookups
+                        </h2>
+                        <button id="refresh-recent" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div id="recent-lookups" class="space-y-3 max-h-[300px] overflow-auto">
+                            <p class="text-gray-500 text-center py-8">Loading recent lookups...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Health -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="bg-gray-50 px-6 py-4 border-b">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-heartbeat mr-2 text-red-500"></i>
+                            System Health
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium">5250 Protocol Module</span>
+                                <span id="p5250-health" class="px-2 py-1 rounded-full text-xs font-medium">
+                                    <span class="status-indicator status-offline"></span>Checking...
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium">IBM i Connectivity</span>
+                                <span id="ibm-health" class="px-2 py-1 rounded-full text-xs font-medium">
+                                    <span class="status-indicator status-offline"></span>Checking...
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium">Redis Cache</span>
+                                <span id="redis-health" class="px-2 py-1 rounded-full text-xs font-medium">
+                                    <span class="status-indicator status-offline"></span>Checking...
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <span class="font-medium">Flask API</span>
+                                <span id="api-health" class="px-2 py-1 rounded-full text-xs font-medium">
+                                    <span class="status-indicator status-online"></span>Online
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cache Management -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="bg-gray-50 px-6 py-4 border-b">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-memory mr-2 text-purple-500"></i>
+                            Cache Management
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">Cache Status</span>
+                                <span id="cache-status" class="font-medium">Unknown</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-gray-600">Cached Entries</span>
+                                <span id="cache-entries" class="font-medium">--</span>
+                            </div>
+                            <div class="pt-4 border-t">
+                                <button id="clear-cache" class="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                                    <i class="fas fa-trash mr-2"></i>Clear All Cache
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Log -->
+            <div class="mt-8 bg-white rounded-lg shadow-md">
+                <div class="bg-gray-50 px-6 py-4 border-b flex items-center justify-between">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2 text-yellow-500"></i>
+                        Error Log
+                    </h2>
+                    <div class="flex items-center space-x-2">
+                        <span id="error-count" class="text-sm text-gray-600">0 errors</span>
+                        <button id="refresh-errors" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6">
+                    <div id="error-log" class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm h-64 overflow-auto">
+                        <p class="text-gray-500">No recent errors...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AdminDashboard {
+            constructor() {
+                this.refreshInterval = null;
+                this.apiBase = '/api/inventory';
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.startAutoRefresh();
+                this.loadDashboard();
+            }
+
+            bindEvents() {
+                // Refresh buttons
+                document.getElementById('refresh-all').addEventListener('click', () => this.loadDashboard());
+                document.getElementById('refresh-recent').addEventListener('click', () => this.loadRecentLookups());
+                document.getElementById('refresh-errors').addEventListener('click', () => this.loadErrorLog());
+
+                // SKU test
+                document.getElementById('test-lookup').addEventListener('click', () => this.testSKULookup());
+                document.getElementById('test-sku').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.testSKULookup();
+                });
+
+                // Cache management
+                document.getElementById('clear-cache').addEventListener('click', () => this.clearCache());
+            }
+
+            startAutoRefresh() {
+                this.refreshInterval = setInterval(() => {
+                    this.loadSystemStatus();
+                    this.loadMetrics();
+                }, 30000); // Refresh every 30 seconds
+            }
+
+            async loadDashboard() {
+                document.getElementById('refresh-all').innerHTML = '<i class="fas fa-sync-alt mr-2 refresh-btn"></i>Refreshing...';
+                
+                await Promise.all([
+                    this.loadSystemStatus(),
+                    this.loadMetrics(),
+                    this.loadRecentLookups(),
+                    this.loadErrorLog()
+                ]);
+
+                document.getElementById('refresh-all').innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Refresh All';
+                document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+            }
+
+            async loadSystemStatus() {
+                try {
+                    const response = await fetch(`${this.apiBase}/status`);
+                    const data = await response.json();
+
+                    // Update status indicators
+                    this.updateStatusIndicator('system-status', data.available ? 'Online' : 'Offline', data.available);
+                    this.updateStatusIndicator('ibm-connection', data.connected ? 'Connected' : 'Disconnected', data.connected);
+                    this.updateStatusIndicator('redis-status', data.redis_available ? 'Connected' : 'Unavailable', data.redis_available);
+                    
+                    // Update uptime
+                    document.getElementById('uptime').textContent = data.uptime || '--';
+
+                    // Update health indicators
+                    this.updateHealthIndicator('p5250-health', data.available);
+                    this.updateHealthIndicator('ibm-health', data.connected);
+                    this.updateHealthIndicator('redis-health', data.redis_available);
+
+                } catch (error) {
+                    console.error('Failed to load system status:', error);
+                    this.updateStatusIndicator('system-status', 'Error', false);
+                }
+            }
+
+            async loadMetrics() {
+                try {
+                    const response = await fetch(`${this.apiBase}/metrics`);
+                    const data = await response.json();
+                    const metrics = data.metrics;
+
+                    document.getElementById('total-lookups').textContent = metrics.total_lookups || 0;
+                    
+                    const successRate = metrics.total_lookups > 0 ? 
+                        Math.round((metrics.successful_lookups / metrics.total_lookups) * 100) : 0;
+                    document.getElementById('success-rate').textContent = `${successRate}%`;
+
+                    const cacheHitRate = Math.round(data.cache_info?.cache_hit_rate || 0);
+                    document.getElementById('cache-hit-rate').textContent = `${cacheHitRate}%`;
+
+                    const avgResponse = Math.round(metrics.avg_response_time * 1000) || 0;
+                    document.getElementById('avg-response').textContent = `${avgResponse}ms`;
+
+                    // Update error count
+                    document.getElementById('error-count').textContent = `${metrics.errors || 0} errors`;
+
+                } catch (error) {
+                    console.error('Failed to load metrics:', error);
+                }
+            }
+
+            async loadRecentLookups() {
+                try {
+                    const response = await fetch(`${this.apiBase}/recent`);
+                    const data = await response.json();
+                    const container = document.getElementById('recent-lookups');
+
+                    if (data.recent_lookups && data.recent_lookups.length > 0) {
+                        container.innerHTML = data.recent_lookups.map(lookup => `
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div>
+                                    <div class="font-medium">${lookup.sku}</div>
+                                    <div class="text-sm text-gray-600">${lookup.description || 'No description'}</div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-medium text-green-600">${lookup.on_hand || 0} EA</div>
+                                    <div class="text-xs text-gray-500">${new Date(lookup.timestamp).toLocaleTimeString()}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        container.innerHTML = '<p class="text-gray-500 text-center py-8">No recent lookups available</p>';
+                    }
+
+                } catch (error) {
+                    console.error('Failed to load recent lookups:', error);
+                    document.getElementById('recent-lookups').innerHTML = 
+                        '<p class="text-red-500 text-center py-8">Failed to load recent lookups</p>';
+                }
+            }
+
+            async loadErrorLog() {
+                try {
+                    const response = await fetch(`${this.apiBase}/metrics`);
+                    const data = await response.json();
+                    const errorLog = document.getElementById('error-log');
+
+                    if (data.metrics.last_error) {
+                        const error = data.metrics.last_error;
+                        errorLog.innerHTML = `
+                            <div class="text-red-400">
+                                [${new Date(error.timestamp).toLocaleString()}] ERROR: ${error.message}
+                            </div>
+                            <p class="text-gray-500 mt-2">Latest error shown. Check application logs for full history.</p>
+                        `;
+                    } else {
+                        errorLog.innerHTML = '<p class="text-gray-500">No recent errors...</p>';
+                    }
+
+                } catch (error) {
+                    console.error('Failed to load error log:', error);
+                }
+            }
+
+            async testSKULookup() {
+                const skuInput = document.getElementById('test-sku');
+                const resultDiv = document.getElementById('test-result');
+                const sku = skuInput.value.trim();
+
+                if (!sku) {
+                    resultDiv.innerHTML = '<p class="text-red-500">Please enter a SKU</p>';
+                    return;
+                }
+
+                resultDiv.innerHTML = '<p class="text-blue-500">Testing SKU lookup...</p>';
+
+                try {
+                    const startTime = Date.now();
+                    const response = await fetch(`${this.apiBase}/lookup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sku: sku })
+                    });
+
+                    const responseTime = Date.now() - startTime;
+                    const data = await response.json();
+
+                    if (data.found) {
+                        resultDiv.innerHTML = `
+                            <div class="text-green-600 font-bold mb-2">✅ SUCCESS (${responseTime}ms)</div>
+                            <div class="space-y-1">
+                                <div><strong>SKU:</strong> ${data.sku}</div>
+                                <div><strong>Description:</strong> ${data.description || 'N/A'}</div>
+                                <div><strong>Warehouse:</strong> ${data.warehouse || 'N/A'}</div>
+                                <div><strong>On Hand:</strong> ${data.on_hand || 0} ${data.unit_of_measure || 'EA'}</div>
+                                <div><strong>Available:</strong> ${data.net_available || 0}</div>
+                                <div><strong>Allocated:</strong> ${data.allocated || 0}</div>
+                                <div><strong>On P/O:</strong> ${data.on_purchase_order || 0}</div>
+                                <div><strong>On B/O:</strong> ${data.on_back_order || 0}</div>
+                                <div class="text-xs text-gray-500 mt-2">Retrieved: ${data.timestamp}</div>
+                            </div>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `
+                            <div class="text-yellow-600 font-bold mb-2">⚠️ NOT FOUND (${responseTime}ms)</div>
+                            <p>SKU ${sku} was not found in the inventory system.</p>
+                            ${data.error ? `<p class="text-red-500 mt-2">Error: ${data.error}</p>` : ''}
+                        `;
+                    }
+
+                } catch (error) {
+                    resultDiv.innerHTML = `
+                        <div class="text-red-600 font-bold mb-2">❌ ERROR</div>
+                        <p>Failed to lookup SKU: ${error.message}</p>
+                    `;
+                }
+            }
+
+            async clearCache() {
+                if (!confirm('Are you sure you want to clear all cached inventory data?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${this.apiBase}/cache/clear`, {
+                        method: 'POST'
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        alert(`Cache cleared successfully. ${data.message}`);
+                        this.loadMetrics(); // Refresh metrics
+                    } else {
+                        alert(`Failed to clear cache: ${data.error}`);
+                    }
+
+                } catch (error) {
+                    alert(`Failed to clear cache: ${error.message}`);
+                }
+            }
+
+            updateStatusIndicator(elementId, text, isOnline) {
+                const element = document.getElementById(elementId);
+                const indicator = element.querySelector('.status-indicator');
+                
+                indicator.className = `status-indicator ${isOnline ? 'status-online' : 'status-offline'}`;
+                element.innerHTML = `<span class="status-indicator ${isOnline ? 'status-online' : 'status-offline'}"></span>${text}`;
+            }
+
+            updateHealthIndicator(elementId, isHealthy) {
+                const element = document.getElementById(elementId);
+                const status = isHealthy ? 'Online' : 'Offline';
+                const statusClass = isHealthy ? 'status-online' : 'status-offline';
+                
+                element.innerHTML = `<span class="status-indicator ${statusClass}"></span>${status}`;
+            }
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.adminDashboard = new AdminDashboard();
+        });
+    </script>
+</body>
+</html>
