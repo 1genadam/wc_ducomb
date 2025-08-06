@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WC Ducomb - Local Inventory Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .chat-message {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .inventory-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .success-gradient {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">🏢 WC Ducomb Inventory Chat</h1>
+            <p class="text-gray-600 mb-4">Local Development - Chat-Based Inventory Verification</p>
+            
+            <!-- Network Status -->
+            <div id="network-status" class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium">
+                <div class="w-3 h-3 rounded-full mr-2" id="status-dot"></div>
+                <span id="status-text">Checking network...</span>
+            </div>
+        </header>
+
+        <!-- Demo Success Example -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8 border-l-4 border-green-500">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">🎯 Target Result (From Production Success)</h3>
+            <div class="bg-gray-50 p-4 rounded-lg font-mono text-sm">
+                <div class="text-green-600 font-bold mb-2">📦 Current Inventory for DGE037592</div>
+                <div class="text-blue-600 mb-3">✅ Successfully Retrieved from IBM i System (10.0.0.7)</div>
+                
+                <div class="mb-3">
+                    <strong>Product Details:</strong><br>
+                    - SKU: DGE037592<br>
+                    - Description: INS-IP-206R DGE 070894<br>
+                    - Status: Active<br>
+                    - Unit of Measure: EA (Each)<br>
+                    - Warehouse: 00 (WCD - Mt. Elliott Location)
+                </div>
+                
+                <div class="mb-3">
+                    <strong>Current Stock Levels:</strong><br>
+                    - 📊 On Hand: 2.000 units<br>
+                    - 🔒 Allocated: 0.000 units<br>
+                    - 🎯 Net Available: 2.000 units<br>
+                    - 📋 On Purchase Order: 0.000 units<br>
+                    - ⏳ On Backorder: 0.000 units
+                </div>
+                
+                <div class="text-gray-600">
+                    <strong>Summary:</strong> You currently have 2 units available for sale.
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Interface -->
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Chat Panel -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-lg flex flex-col h-[600px]">
+                    <!-- Chat Header -->
+                    <div class="inventory-card text-white p-4 rounded-t-lg">
+                        <h2 class="text-xl font-bold">💬 Inventory Assistant</h2>
+                        <p class="text-blue-100 text-sm">Ask me to look up any SKU!</p>
+                    </div>
+
+                    <!-- Chat Messages -->
+                    <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <div class="chat-message">
+                            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                                <p class="text-gray-800">👋 Hello! I'm your inventory assistant. I can look up real-time inventory data from the IBM i system.</p>
+                                <p class="text-sm text-gray-600 mt-2">Try asking: "Look up DGE037592" or "Check inventory for DGE037700"</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="p-4 border-t">
+                        <div class="flex space-x-3">
+                            <input 
+                                type="text" 
+                                id="chat-input" 
+                                placeholder="Enter SKU or ask about inventory..." 
+                                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                                autocomplete="off"
+                            >
+                            <button 
+                                id="send-button" 
+                                class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Panel -->
+            <div class="space-y-6">
+                <!-- Quick Test SKUs -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🔍 Quick Test SKUs</h3>
+                    <div class="space-y-2">
+                        <button class="quick-sku w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 rounded transition-colors" data-sku="DGE037592">
+                            <div class="font-mono text-sm text-blue-600">DGE037592</div>
+                            <div class="text-xs text-gray-500">INS-IP-206R (Known good)</div>
+                        </button>
+                        <button class="quick-sku w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 rounded transition-colors" data-sku="DGE037700">
+                            <div class="font-mono text-sm text-blue-600">DGE037700</div>
+                            <div class="text-xs text-gray-500">Test SKU</div>
+                        </button>
+                        <button class="quick-sku w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 rounded transition-colors" data-sku="ABC123">
+                            <div class="font-mono text-sm text-blue-600">ABC123</div>
+                            <div class="text-xs text-gray-500">Test not found</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🔧 System Status</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span>Frontend:</span>
+                            <span class="text-green-600" id="frontend-status">Active</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>API:</span>
+                            <span id="api-status">Checking...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>IBM i Connection:</span>
+                            <span id="ibm-status">Depends on network</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Development Info -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">💻 Dev Info</h3>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p><strong>Frontend:</strong> http://localhost:2000</p>
+                        <p><strong>API:</strong> http://localhost:5001</p>
+                        <p><strong>On Office Network:</strong> Full functionality</p>
+                        <p><strong>Remote:</strong> Demo/Mock data</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LocalInventoryChat {
+            constructor() {
+                this.baseUrl = window.location.origin;
+                this.messages = [];
+                this.isLoading = false;
+                this.init();
+            }
+
+            async init() {
+                this.bindEvents();
+                await this.checkSystemStatus();
+                this.addMessage('system', '🚀 Local development chat ready! Ask me to look up any SKU.');
+            }
+
+            bindEvents() {
+                // Send button
+                document.getElementById('send-button').addEventListener('click', () => {
+                    this.handleSendMessage();
+                });
+
+                // Enter key
+                document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.handleSendMessage();
+                    }
+                });
+
+                // Quick SKU buttons
+                document.querySelectorAll('.quick-sku').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const sku = e.currentTarget.dataset.sku;
+                        document.getElementById('chat-input').value = `Look up ${sku}`;
+                        this.handleSendMessage();
+                    });
+                });
+            }
+
+            async checkSystemStatus() {
+                try {
+                    // Check API health
+                    const response = await fetch('http://localhost:5001/api/inventory/health');
+                    const data = await response.json();
+                    
+                    document.getElementById('api-status').innerHTML = '<span class="text-green-600">Active</span>';
+                    
+                    // Check network connectivity
+                    const networkOnline = data.network_status === 'OFFICE';
+                    const statusElement = document.getElementById('network-status');
+                    const statusDot = document.getElementById('status-dot');
+                    const statusText = document.getElementById('status-text');
+                    
+                    if (networkOnline) {
+                        statusElement.className = 'inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800';
+                        statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-green-500';
+                        statusText.textContent = 'Office Network - Full functionality';
+                        document.getElementById('ibm-status').innerHTML = '<span class="text-green-600">Connected</span>';
+                    } else {
+                        statusElement.className = 'inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
+                        statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-yellow-500';
+                        statusText.textContent = 'Remote - Limited functionality';
+                        document.getElementById('ibm-status').innerHTML = '<span class="text-yellow-600">Offline</span>';
+                    }
+                    
+                } catch (error) {
+                    document.getElementById('api-status').innerHTML = '<span class="text-red-600">Offline</span>';
+                    console.error('Status check failed:', error);
+                }
+            }
+
+            async handleSendMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+                
+                if (!message || this.isLoading) return;
+                
+                // Add user message
+                this.addMessage('user', message);
+                input.value = '';
+                
+                // Extract SKU from message
+                const skuMatch = message.match(/([A-Z0-9]+\d+[A-Z0-9]*)/i);
+                
+                if (skuMatch) {
+                    await this.lookupSKU(skuMatch[1].toUpperCase());
+                } else {
+                    this.addMessage('assistant', '🤔 I can help you look up inventory! Please provide a SKU number (like DGE037592) or ask me to look up a specific item.');
+                }
+            }
+
+            async lookupSKU(sku) {
+                this.isLoading = true;
+                this.addMessage('assistant', `🔍 Looking up ${sku}... This may take up to 45 seconds for live data from IBM i system.`);
+                this.showTypingIndicator();
+
+                try {
+                    // Create abort controller for timeout handling
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
+                    
+                    const response = await fetch('http://localhost:5001/api/inventory/lookup', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ sku: sku }),
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    const data = await response.json();
+                    
+                    this.hideTypingIndicator();
+                    
+                    if (data.found) {
+                        this.displayInventoryResult(data);
+                    } else {
+                        this.addMessage('assistant', `❌ Sorry, I couldn't find inventory data for SKU ${sku}. ${data.message || 'Please check the SKU and try again.'}`);
+                    }
+                } catch (error) {
+                    this.hideTypingIndicator();
+                    this.addMessage('assistant', `⚠️ There was an error looking up ${sku}. ${error.message || 'Please try again.'}`);
+                }
+                
+                this.isLoading = false;
+            }
+
+            displayInventoryResult(data) {
+                const sku = data.sku;
+                
+                // Generate summary based on available data
+                const onHand = parseFloat(data.on_hand || 0);
+                const allocated = parseFloat(data.allocated || 0);
+                const netAvailable = parseFloat(data.net_available || 0);
+                const onPO = parseFloat(data.on_purchase_order || 0);
+                const onBO = parseFloat(data.on_back_order || 0);
+                
+                let summary = `You currently have ${onHand} units of SKU ${sku} in stock`;
+                if (allocated > 0) {
+                    summary += `, with ${allocated} units allocated`;
+                }
+                if (netAvailable !== onHand) {
+                    summary += ` and ${netAvailable} units available for sale`;
+                }
+                if (onPO > 0) {
+                    summary += `. There are ${onPO} units on purchase order`;
+                }
+                if (onBO > 0) {
+                    summary += ` and ${onBO} units on backorder`;
+                }
+                summary += '.';
+                
+                const message = `
+                    <div class="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-4">
+                        <div class="text-green-700 font-bold text-lg mb-2">📦 Current Inventory for ${sku}</div>
+                        <div class="text-blue-600 mb-3">✅ Successfully Retrieved from IBM i System (10.0.0.7)</div>
+                        
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <strong class="text-gray-700">Product Details:</strong>
+                                <ul class="mt-2 space-y-1 text-sm">
+                                    <li><strong>SKU:</strong> ${sku}</li>
+                                    <li><strong>Description:</strong> ${data.description || 'N/A'}</li>
+                                    <li><strong>Status:</strong> ${data.status || 'Active'}</li>
+                                    <li><strong>Unit of Measure:</strong> ${data.unit_of_measure || 'EA'} (Each)</li>
+                                    <li><strong>Warehouse:</strong> ${data.warehouse || '00'} (WCD - Mt. Elliott Location)</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <strong class="text-gray-700">Current Stock Levels:</strong>
+                                <ul class="mt-2 space-y-1 text-sm">
+                                    <li>📊 <strong>On Hand:</strong> ${data.on_hand || '0.000'} units</li>
+                                    <li>🔒 <strong>Allocated:</strong> ${data.allocated || '0.000'} units</li>
+                                    <li>🎯 <strong>Net Available:</strong> ${data.net_available || '0.000'} units</li>
+                                    <li>📋 <strong>On Purchase Order:</strong> ${data.on_purchase_order || '0.000'} units</li>
+                                    <li>⏳ <strong>On Backorder:</strong> ${data.on_back_order || '0.000'} units</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 p-3 bg-white rounded border-l-4 border-blue-500">
+                            <strong class="text-gray-700">Summary:</strong>
+                            <span class="text-gray-600">${summary}</span>
+                        </div>
+                    </div>
+                `;
+                
+                this.addMessage('assistant', message);
+            }
+
+            addMessage(type, content) {
+                const messagesContainer = document.getElementById('chat-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message';
+                
+                if (type === 'user') {
+                    messageDiv.innerHTML = `
+                        <div class="flex justify-end">
+                            <div class="bg-blue-600 text-white px-4 py-2 rounded-lg max-w-xs lg:max-w-md">
+                                ${content}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="flex">
+                            <div class="bg-gray-100 px-4 py-2 rounded-lg max-w-full">
+                                ${content}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            showTypingIndicator() {
+                const messagesContainer = document.getElementById('chat-messages');
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'chat-message';
+                typingDiv.innerHTML = `
+                    <div class="flex">
+                        <div class="bg-gray-100 px-4 py-2 rounded-lg">
+                            <div class="flex space-x-1">
+                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style="animation-delay: 0.1s"></div>
+                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                messagesContainer.appendChild(typingDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            hideTypingIndicator() {
+                const typingIndicator = document.getElementById('typing-indicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+        }
+
+        // Initialize chat when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new LocalInventoryChat();
+        });
+    </script>
+</body>
+</html>

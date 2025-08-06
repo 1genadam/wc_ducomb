@@ -47,18 +47,49 @@ app.use('/api', createProxyMiddleware({
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({
-        status: 'healthy',
-        service: 'WC Ducomb Inventory Frontend',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        version: require('./package.json').version || '1.0.0'
+    // Check network connectivity to IBM i system
+    const net = require('net');
+    const socket = new net.Socket();
+    
+    const checkConnection = () => {
+        return new Promise((resolve) => {
+            socket.setTimeout(2000);
+            socket.on('connect', () => {
+                socket.destroy();
+                resolve(true);
+            });
+            socket.on('timeout', () => {
+                socket.destroy();
+                resolve(false);
+            });
+            socket.on('error', () => {
+                resolve(false);
+            });
+            socket.connect(23, '10.0.0.7');
+        });
+    };
+    
+    checkConnection().then(canConnect => {
+        res.json({
+            status: 'healthy',
+            service: 'WC Ducomb Inventory Frontend',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            version: require('./package.json').version || '1.0.0',
+            network_status: canConnect ? 'OFFICE' : 'REMOTE',
+            ibm_i_accessible: canConnect
+        });
     });
 });
 
 // Serve inventory chat demo as default page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'inventory-chat-demo.html'));
+});
+
+// Serve local development chat interface
+app.get('/local', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'local-chat.html'));
 });
 
 // Serve admin dashboard
