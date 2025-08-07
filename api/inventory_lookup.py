@@ -136,14 +136,28 @@ class InventoryLookupService:
                 try:
                     logger.info(f"Connection attempt {attempt + 1} to {IBM_HOST}:{IBM_PORT}")
                     
-                    # Create new client
-                    self.client = P5250Client(
-                        hostName=IBM_HOST,
-                        hostPort=str(IBM_PORT),
-                        modelName='3279-2',
-                        enableTLS='no',
-                        timeoutInSec=30
-                    )
+                    # Create new client with platform-specific configuration
+                    import platform
+                    if platform.system() == 'Linux':
+                        # Linux/Fly.io optimized configuration
+                        logger.info("Using Linux-optimized P5250Client configuration")
+                        self.client = P5250Client(
+                            hostName=IBM_HOST,
+                            hostPort=str(IBM_PORT),
+                            modelName='3178-2',  # Different terminal model for Linux
+                            enableTLS=False,     # Boolean instead of string
+                            timeoutInSec=10      # Shorter timeout for container environment
+                        )
+                    else:
+                        # macOS/local configuration (proven working)
+                        logger.info("Using macOS-optimized P5250Client configuration") 
+                        self.client = P5250Client(
+                            hostName=IBM_HOST,
+                            hostPort=str(IBM_PORT),
+                            modelName='3279-2',
+                            enableTLS='no',
+                            timeoutInSec=30
+                        )
                     
                     # Connect
                     self.client.connect()
