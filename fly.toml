@@ -6,8 +6,6 @@ primary_region = "ord"
   PORT = "3000"
   API_PORT = "5001"
   IBM_HOST = "10.0.0.7"
-  IBM_USER = "ROBERT"
-  IBM_PASSWORD = "TECH"
 
 [http_service]
   internal_port = 3000

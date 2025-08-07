@@ -16,6 +16,17 @@ from threading import Lock
 import redis
 from functools import wraps
 
+# Load environment variables from .env file if it exists (for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger = logging.getLogger(__name__)  # Will be properly configured below
+    if logger.handlers:  # Only log if logger is set up
+        logger.info("Loaded environment variables from .env file")
+except ImportError:
+    # dotenv not available, use system environment variables only
+    pass
+
 # Import the 5250 automation module
 try:
     from p5250 import P5250Client
@@ -39,10 +50,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # IBM i Connection Configuration
-IBM_HOST = "10.0.0.7"
-IBM_PORT = 23
-USER = "ROBERT"  # Replace with actual credentials
-PASSWORD = "TECH"  # Replace with actual credentials
+# Load from environment variables (local .env file or Fly.io secrets)
+IBM_HOST = os.getenv('IBM_HOST', '10.0.0.7')
+IBM_PORT = int(os.getenv('IBM_PORT', '23'))
+USER = os.getenv('IBM_USER', 'ROBERT')
+PASSWORD = os.getenv('IBM_PASSWORD', 'TECH')
 
 # Redis Configuration for caching
 try:
