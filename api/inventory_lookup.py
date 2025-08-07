@@ -136,34 +136,53 @@ class InventoryLookupService:
                 try:
                     logger.info(f"Connection attempt {attempt + 1} to {IBM_HOST}:{IBM_PORT}")
                     
-                    # Create new client with platform-specific configuration
-                    import platform
-                    if platform.system() == 'Linux':
-                        # Linux/Fly.io optimized configuration
-                        logger.info("Using Linux-optimized P5250Client configuration")
-                        self.client = P5250Client(
-                            hostName=IBM_HOST,
-                            hostPort=str(IBM_PORT),
-                            modelName='3178-2',  # Different terminal model for Linux
-                            enableTLS=False,     # Boolean instead of string
-                            timeoutInSec=10      # Shorter timeout for container environment
-                        )
-                    else:
-                        # macOS/local configuration (proven working)
-                        logger.info("Using macOS-optimized P5250Client configuration") 
-                        self.client = P5250Client(
-                            hostName=IBM_HOST,
-                            hostPort=str(IBM_PORT),
-                            modelName='3279-2',
-                            enableTLS='no',
-                            timeoutInSec=30
-                        )
+                    # Create new client - use the PROVEN working configuration
+                    logger.info("Using proven working P5250Client configuration")
+                    self.client = P5250Client(
+                        hostName=IBM_HOST,
+                        hostPort=str(IBM_PORT),
+                        modelName='3279-2',
+                        enableTLS='no',
+                        timeoutInSec=30
+                    )
                     
-                    # Connect
-                    self.client.connect()
+                    # Connect with timeout protection
+                    logger.info("Attempting connection with timeout wrapper...")
+                    import threading
+                    import signal
                     
-                    if not self.client.isConnected():
-                        raise Exception("Connection failed - not connected")
+                    # Connection result storage
+                    connection_result = [False, None]
+                    
+                    def connect_with_timeout():
+                        try:
+                            self.client.connect()
+                            connection_result[0] = self.client.isConnected()
+                            if connection_result[0]:
+                                logger.info("P5250Client connected successfully")
+                            else:
+                                connection_result[1] = "isConnected() returned False"
+                        except Exception as e:
+                            connection_result[1] = str(e)
+                    
+                    # Start connection in thread with timeout
+                    connect_thread = threading.Thread(target=connect_with_timeout)
+                    connect_thread.daemon = True
+                    connect_thread.start()
+                    connect_thread.join(timeout=15)  # 15 second timeout
+                    
+                    if connect_thread.is_alive():
+                        logger.error("Connection attempt timed out after 15 seconds")
+                        try:
+                            self.client.disconnect()
+                        except:
+                            pass
+                        raise Exception("Connection timed out")
+                    
+                    if not connection_result[0]:
+                        error_msg = connection_result[1] or "Connection failed"
+                        logger.error(f"Connection failed: {error_msg}")
+                        raise Exception(f"Connection failed: {error_msg}")
                     
                     # Handle login sequence
                     if not self.login_sequence():
