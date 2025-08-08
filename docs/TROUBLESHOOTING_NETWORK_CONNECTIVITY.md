@@ -45,6 +45,10 @@ robertsher@MacBookPro ~ % telnet 66.230.69.194 23
 robertsher@MacBookPro ~ % telnet 216.176.21.86 23
 # Result: Connected! Shows IBM i login screen
 
+# After security hardening with custom port (should FAIL from Mac)
+robertsher@MacBookPro ~ % telnet 216.176.21.86 52323
+# Result: Connection refused (good - security working)
+
 # Test internal connection (only works on local network)
 robertsher@MacBookPro ~ % telnet 10.0.0.7 23
 # Result: Connected if on local network
@@ -54,16 +58,16 @@ robertsher@MacBookPro ~ % curl https://wc-ducomb.fly.dev/api/inventory/health
 # Result: {"ibm_connection": false} before fix, true after
 
 # Check Fly.io configuration
-robertsher@MacBookPro ~ % flyctl ips list -a wc_ducomb
+robertsher@MacBookPro ~ % flyctl ips list -a wc-ducomb
 # Result: Shows 66.241.125.125 (inbound only)
 
 # Connect to Fly.io container
-robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
+robertsher@MacBookPro ~ % flyctl ssh console -a wc-ducomb
 ```
 
 ### Terminal 2: Inside Fly.io Container
 ```bash
-# After running: flyctl ssh console -a wc_ducomb
+# After running: flyctl ssh console -a wc-ducomb
 root@185e777a160128:/app# 
 
 # Check outbound IPv4 address
@@ -74,12 +78,20 @@ root@185e777a160128:/app# curl -4 ifconfig.me
 root@185e777a160128:/app# curl ifconfig.me
 # Result: 2605:4c40:118:603b:0:d6e2:3f4:1
 
-# Install telnet for testing (if needed)
+# Check environment variables
+root@185e777a160128:/app# echo $IBM_HOST
+216.176.21.86
+root@185e777a160128:/app# echo $IBM_PORT
+52323
+
+# Install telnet for testing (may fail due to memory)
 root@185e777a160128:/app# apt-get update && apt-get install -y telnet
 
-# Test connection to IBM i (after updating to correct IP)
-root@185e777a160128:/app# telnet 216.176.21.86 23
-# Should connect after fix
+# Alternative: Test with Python
+root@185e777a160128:/app# python3 -c "import socket; s=socket.socket(); s.settimeout(5); s.connect(('216.176.21.86', 52323)); print('Connected!'); s.close()"
+
+# Check app code for hardcoded ports
+root@185e777a160128:/app# grep -r "port\|23\|5250" api/
 
 # Exit container
 root@185e777a160128:/app# exit
@@ -103,10 +115,12 @@ sducomb@wcd_router:/tmp/home/root# iptables -t nat -L -n -v
 
 # View port forwarding rules specifically
 sducomb@wcd_router:/tmp/home/root# iptables -t nat -L VSERVER -n -v --line-numbers
+# Should show:
+# DNAT tcp -- * * 69.31.3.78 0.0.0.0/0 tcp dpt:52323 to:10.0.0.7
 
 # Check if packets are hitting rules (clear counters first)
 sducomb@wcd_router:/tmp/home/root# iptables -t nat -Z VSERVER
-# Then test connection from Mac, then check counters again:
+# Then test connection from Fly.io, then check counters again:
 sducomb@wcd_router:/tmp/home/root# iptables -t nat -L VSERVER -n -v --line-numbers
 
 # Exit router SSH
@@ -115,8 +129,10 @@ sducomb@wcd_router:/tmp/home/root# exit
 
 ### Terminal 4: IBM i Green Screen (via telnet)
 ```bash
-# Connect from Mac
+# Connect from Mac (works when Source IP unrestricted)
 robertsher@MacBookPro ~ % telnet 216.176.21.86 23
+# OR with custom port
+robertsher@MacBookPro ~ % telnet 216.176.21.86 52323
 
 # You'll see:
 Connected to 216.176.21.86.
@@ -127,182 +143,108 @@ Escape character is '^]'.
                                                Subsystem . . . . :   QINTER     
                                                Display . . . . . :   QPADEV0024 
 
-# IBM i Commands used during investigation:
-WRKTCPSTS         # Work with TCP/IP Status
-CFGTCP            # Configure TCP/IP  
-GO TCPADM         # TCP/IP Administration menu
-WRKREGINF         # Work with Registration Information
-WRKMBRPDM FILE(QGPL/QCLSRC)  # Check startup programs
-WRKOBJ *ALL/IP* *FILE         # Search for IP-related files
-WRKOBJ *ALL/IP* *DTAARA       # Search for IP-related data areas
-DSPDTAARA DTAARA(AKTSUPPORT/REMOTIP)  # Display data area contents
-
 # Exit telnet session: Ctrl+] then type 'quit'
 ```
 
 ---
 
-## Troubleshooting Steps Performed (Detailed)
+## The Solution (Complete Process)
 
-### Step 1: Initial Problem Discovery
-```bash
-# FROM MAC TERMINAL:
-robertsher@MacBookPro ~ % curl https://wc-ducomb.fly.dev/api/inventory/health
-{"services":{"ibm_connection":false,"p5250":true,"redis":false},"status":"healthy"}
-# Problem confirmed: ibm_connection is false
-```
+### Phase 1: Initial Fix (Wide Open - INSECURE)
+Via ASUS Router Web Interface:
 
-### Step 2: Check Fly.io Configuration
-```bash
-# FROM MAC TERMINAL:
-robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
-Connecting to fdaa:c:91cc:a7b:1cb:d6e2:3f4:2... complete
-
-# NOW IN FLY.IO CONTAINER:
-root@185e777a160128:/app# curl -4 ifconfig.me
-69.31.3.78
-# This is the NEW outbound IP (was 69.31.3.73)
-```
-
-### Step 3: Investigate Router Configuration
-```bash
-# FROM MAC TERMINAL:
-robertsher@MacBookPro ~ % ssh -p 1024 sducomb@10.0.0.1
-
-# NOW IN ROUTER:
-sducomb@wcd_router:/tmp/home/root# iptables -t nat -L VSERVER -n -v --line-numbers
-Chain VSERVER (1 references)
-num   pkts bytes target     prot opt in     out     source               destination
-4        0     0 DNAT       tcp  --  *      *       69.31.3.78           0.0.0.0/0            tcp dpt:23 to:10.0.0.7
-# Found the rule! It only accepts from 69.31.3.78
-
-sducomb@wcd_router:/tmp/home/root# ip addr show eth0 | grep inet
-    inet 216.176.21.86/30 brd 216.176.21.87 scope global eth0
-# Router WAN IP is 216.176.21.86, NOT 66.230.69.194!
-```
-
----
-
-## The Solution (Step-by-Step)
-
-### Via ASUS Router Web Interface:
-
-1. **Access Router Web Interface**:
-   - Open browser to: http://10.0.0.1
-   - Login with credentials
-
-2. **Navigate to Port Forwarding**:
-   - Click: WAN → Virtual Server / Port Forwarding
+1. **Navigate to Port Forwarding**:
+   - Go to: WAN → Virtual Server / Port Forwarding
    - Find the ISERIES rule (Port 23)
-   - Note the Source IP field shows: 69.31.3.78
 
-3. **Edit the Rule**:
+2. **Remove Source IP Restriction**:
    - Click Edit (pencil icon) on ISERIES row
-   - **Clear the Source IP field completely** (delete 69.31.3.78)
-   - Leave all other settings:
-     - Service Name: ISERIES
-     - Protocol: TCP
-     - External Port: 23
-     - Internal Port: (leave blank)
-     - Internal IP Address: 10.0.0.7
+   - **Clear the Source IP field** (was: 69.31.3.78, now: empty)
+   - Click OK, then Apply
 
-4. **Save Changes**:
-   - Click OK in the dialog
-   - Click Apply on the main page
-   - Wait for router to apply changes
-
-5. **Verify Fix**:
+3. **Update Fly.io Application**:
 ```bash
-# FROM MAC TERMINAL:
-robertsher@MacBookPro ~ % telnet 216.176.21.86 23
-Trying 216.176.21.86...
-Connected to 216.176.21.86.
-# SUCCESS! IBM i login screen appears
+flyctl secrets set IBM_HOST=216.176.21.86 -a wc-ducomb
+flyctl apps restart wc-ducomb
 ```
+
+### Phase 2: Security Hardening (RECOMMENDED)
+After confirming connectivity works:
+
+1. **Change to Non-Standard Port**:
+   - Edit ISERIES rule again
+   - Change External Port: 52323 (or any high port)
+   - Add Source IP: 69.31.3.78 (Fly.io only)
+   - Internal Port: leave blank (will use 23)
+   - Click OK, then Apply
+
+2. **Update Fly.io Environment**:
+```bash
+flyctl secrets set IBM_PORT=52323 -a wc-ducomb
+flyctl apps restart wc-ducomb
+```
+
+3. **Update Application Code** (if hardcoded):
+   - The app must use IBM_PORT environment variable
+   - Or construct connection as: `${IBM_HOST}:${IBM_PORT}`
 
 ---
 
-## Application Updates Required
+## Current Issues & Solutions
 
-### Update Fly.io Environment Variables:
+### Problem: App Still Using Port 23
+**Symptom**: After setting IBM_PORT=52323, health check shows `"ibm_connection": false`
+
+**Root Cause**: Application code is hardcoded to use port 23
+
+**Solution Required**:
+1. Update application code to read IBM_PORT environment variable
+2. Modify connection string in the code from:
+   - `telnet ${IBM_HOST} 23` 
+   - To: `telnet ${IBM_HOST} ${IBM_PORT}`
+
+**Files to Check**:
 ```bash
-# FROM MAC TERMINAL:
-# Check current secrets
-robertsher@MacBookPro ~ % flyctl secrets list -a wc_ducomb
-
-# Update IBM i host IP
-robertsher@MacBookPro ~ % flyctl secrets set IBM_HOST=216.176.21.86 -a wc_ducomb
-
-# Verify the change
-robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
-root@185e777a160128:/app# echo $IBM_HOST
-216.176.21.86
-
-# Test the connection
-root@185e777a160128:/app# telnet $IBM_HOST 23
-# Should connect successfully
+# In Fly.io container
+grep -r "23\|port" /app/api/
+cat /app/api/inventory_lookup.py
 ```
 
-### Update Application Code:
-If the IP is hardcoded anywhere in the application, update it:
-- Search for: `66.230.69.194`
-- Replace with: `216.176.21.86`
-- Or better: Use environment variable `$IBM_HOST`
+### Temporary Workaround Options:
+
+**Option 1: Keep Port 23 (Less Secure)**
+- Change router back to External Port: 23
+- Keep Source IP: 69.31.3.78
+- Accept the lower security of standard port
+
+**Option 2: Port in Host Variable**
+```bash
+flyctl secrets set IBM_HOST=216.176.21.86:52323 -a wc-ducomb
+```
+Only works if app parses host:port format
+
+**Option 3: Fix the Code**
+The proper solution - update the application to use IBM_PORT variable
 
 ---
 
-## Verification Tests
+## Security Considerations
 
-### After applying the fix, run these tests:
+### Current Configuration (Secure)
+- **External Port**: 52323 (non-standard, harder to find)
+- **Source IP**: 69.31.3.78 (only Fly.io can connect)
+- **Internal Port**: 23 (IBM i telnet)
 
-```bash
-# 1. FROM MAC - Test direct connection
-robertsher@MacBookPro ~ % telnet 216.176.21.86 23
-# Expected: Connected, shows IBM i login
+### Risks with Current Setup
+1. If Fly.io IP changes, connection breaks
+2. Telnet is unencrypted (credentials sent in plain text)
+3. Single IP restriction is fragile
 
-# 2. FROM MAC - Test Fly.io health check
-robertsher@MacBookPro ~ % curl https://wc-ducomb.fly.dev/api/inventory/health
-# Expected: {"ibm_connection": true}
-
-# 3. FROM MAC - Test inventory lookup
-robertsher@MacBookPro ~ % curl -X POST https://wc-ducomb.fly.dev/api/inventory/lookup \
-  -H "Content-Type: application/json" \
-  -d '{"sku": "lov224006"}'
-# Expected: Returns inventory data
-
-# 4. FROM FLY.IO CONTAINER - Test connection
-robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
-root@185e777a160128:/app# telnet 216.176.21.86 23
-# Expected: Connected to IBM i
-```
-
----
-
-## Lessons Learned
-
-### 1. Document IP Dependencies
-- Keep track of all IP addresses in the system
-- Document which IPs can change and which are static
-- Note the difference between inbound and outbound IPs
-
-### 2. Avoid IP-Based Security When Possible
-- IP restrictions are fragile with cloud providers
-- Consider alternatives:
-  - VPN connections
-  - API keys/authentication
-  - Stable proxy servers
-
-### 3. Router Configuration Locations
-Key places to check in ASUS routers:
-- WAN → Virtual Server / Port Forwarding (for port rules)
-- Firewall → General (for IP filtering)
-- Administration → System → Service (for SSH access)
-- System Log (for connection attempts)
-
-### 4. Always Test From Multiple Locations
-- Local network (proves IBM i is working)
-- External network (proves port forwarding)
-- From the actual application (proves end-to-end)
+### Better Long-term Solutions
+1. **VPN Connection**: Most secure, encrypted tunnel
+2. **SSH Tunneling**: Encrypted, key-based authentication
+3. **API Gateway**: HTTPS frontend with authentication
+4. **Stable Proxy**: Use a fixed-IP proxy service
 
 ---
 
@@ -315,13 +257,14 @@ Router LAN IP:        10.0.0.1
 IBM i Internal IP:    10.0.0.7
 Fly.io Inbound IP:    66.241.125.125
 Fly.io Outbound IP:   69.31.3.78 (can change!)
+Custom Telnet Port:   52323 (was 23)
 Old WAN IP (dead):    66.230.69.194
 ```
 
 ### Test Commands:
 ```bash
-# Test IBM i from anywhere
-telnet 216.176.21.86 23
+# Test IBM i from anywhere (when unrestricted)
+telnet 216.176.21.86 52323
 
 # Test from Fly.io
 curl https://wc-ducomb.fly.dev/api/inventory/health
@@ -330,7 +273,12 @@ curl https://wc-ducomb.fly.dev/api/inventory/health
 ssh -p 1024 sducomb@10.0.0.1
 
 # SSH to Fly.io
-flyctl ssh console -a wc_ducomb
+flyctl ssh console -a wc-ducomb
+
+# Update Fly.io secrets
+flyctl secrets set IBM_HOST=216.176.21.86 -a wc-ducomb
+flyctl secrets set IBM_PORT=52323 -a wc-ducomb
+flyctl apps restart wc-ducomb
 ```
 
 ### Router iptables Commands:
@@ -346,7 +294,66 @@ iptables -t nat -Z VSERVER
 
 # Check router's WAN IP
 ip addr show eth0 | grep inet
+
+# Add temporary rule (for testing)
+iptables -t nat -I VSERVER 5 -p tcp --dport 52323 -j DNAT --to-destination 10.0.0.7:23
+
+# Remove temporary rule
+iptables -t nat -D VSERVER 5
 ```
+
+---
+
+## Troubleshooting Checklist
+
+When IBM i connection fails:
+
+1. **Check Fly.io Outbound IP**:
+```bash
+flyctl ssh console -a wc-ducomb -C 'curl -4 ifconfig.me'
+```
+
+2. **Check Router WAN IP**:
+```bash
+ssh -p 1024 sducomb@10.0.0.1 'ip addr show eth0 | grep inet'
+```
+
+3. **Verify Port Forwarding Rule**:
+   - WAN → Virtual Server / Port Forwarding
+   - Check External Port, Source IP, Internal IP
+
+4. **Test Connection Path**:
+```bash
+# From Mac (should fail with Source IP restriction)
+telnet [ROUTER_WAN_IP] [PORT]
+
+# From Fly.io container
+python3 -c "import socket; s=socket.socket(); s.settimeout(5); s.connect(('[ROUTER_WAN_IP]', [PORT])); print('Connected!'); s.close()"
+```
+
+5. **Check Environment Variables**:
+```bash
+flyctl ssh console -a wc-ducomb
+echo $IBM_HOST
+echo $IBM_PORT
+```
+
+6. **Review Application Logs**:
+```bash
+flyctl logs -a wc-ducomb
+```
+
+---
+
+## Lessons Learned
+
+1. **Document ALL IP addresses and ports in use**
+2. **Fly.io IPs are unstable** - plan for changes
+3. **Security vs Convenience tradeoff** - restricted IPs break when providers change
+4. **Application should use environment variables** - never hardcode IPs or ports
+5. **Test from multiple locations** - local, external, and from the actual app
+6. **Router shows source/destination differently** - understand NAT rules
+7. **Keep security in mind** - don't leave ports wide open
 
 ---
 
@@ -362,4 +369,4 @@ ip addr show eth0 | grep inet
 ---
 
 *Document created: August 8, 2025*
-*Last updated: August 8, 2025 - Added terminal-specific command sequences and verification tests*
+*Last updated: August 8, 2025 - Added security hardening with custom port 52323 and troubleshooting for hardcoded port issue*
