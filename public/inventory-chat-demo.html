@@ -235,7 +235,7 @@
                         statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-green-500';
                         statusText.textContent = `✅ Inventory system connected (IBM i: ${data.host || '216.176.21.86'})`;
                         document.getElementById('ibm-status').innerHTML = '<span class="text-green-600">Connected</span>';
-                        document.getElementById('data-source-status').innerHTML = '<span class="text-green-600 font-semibold">🔴 LIVE Production Data</span>';
+                        document.getElementById('data-source-status').innerHTML = '<span class="text-green-600 font-semibold">🟢 LIVE Production Data</span>';
                     } else {
                         statusElement.className = 'inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
                         statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-yellow-500';

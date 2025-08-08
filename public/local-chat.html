@@ -155,14 +155,15 @@
                     </div>
                 </div>
 
-                <!-- Development Info -->
+                <!-- Performance Info -->
                 <div class="bg-white rounded-lg shadow-lg p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">💻 Dev Info</h3>
-                    <div class="text-sm text-gray-600 space-y-1" id="dev-info-section">
-                        <p><strong>Frontend:</strong> http://localhost:2000</p>
-                        <p><strong>API:</strong> http://localhost:5001</p>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">📊 Performance</h3>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p><strong>Last response time:</strong> <span id="last-response-time">No requests yet</span></p>
+                        <p><strong>Average Response Time:</strong> ~15-25 seconds</p>
+                        <p><strong>Connection:</strong> <0.1 seconds</p>
                         <p><strong>Data Source:</strong> <span id="data-source-status">Checking...</span></p>
-                        <p><strong>IBM i Host:</strong> 10.0.0.7:23</p>
+                        <p><strong>IBM i Host:</strong> 10.0.0.7 (S7891490)</p>
                     </div>
                 </div>
             </div>
@@ -263,6 +264,7 @@
 
             async lookupSKU(sku) {
                 this.isLoading = true;
+                const startTime = performance.now();
                 this.addMessage('assistant', `🔍 Looking up ${sku}... This may take up to 45 seconds for live data from IBM i system.`);
                 this.showTypingIndicator();
 
@@ -282,24 +284,42 @@
                     
                     clearTimeout(timeoutId);
                     
+                    const endTime = performance.now();
+                    const responseTime = ((endTime - startTime) / 1000).toFixed(2);
+                    
                     const data = await response.json();
                     
                     this.hideTypingIndicator();
                     
+                    // Update performance section with last response time
+                    const performanceElement = document.getElementById('last-response-time');
+                    if (performanceElement) {
+                        performanceElement.innerHTML = `<span class="text-blue-600">${responseTime} seconds</span>`;
+                    }
+                    
                     if (data.found) {
-                        this.displayInventoryResult(data);
+                        this.displayInventoryResult(data, responseTime);
                     } else {
-                        this.addMessage('assistant', `❌ Sorry, I couldn't find inventory data for SKU ${sku}. ${data.message || 'Please check the SKU and try again.'}`);
+                        this.addMessage('assistant', `❌ Sorry, I couldn't find inventory data for SKU ${sku}. ${data.message || 'Please check the SKU and try again.'}<br><div class="mt-2 text-xs text-gray-500">📊 Response time: ${responseTime} seconds</div>`);
                     }
                 } catch (error) {
+                    const endTime = performance.now();
+                    const responseTime = ((endTime - startTime) / 1000).toFixed(2);
                     this.hideTypingIndicator();
-                    this.addMessage('assistant', `⚠️ There was an error looking up ${sku}. ${error.message || 'Please try again.'}`);
+                    
+                    // Update performance section with last response time (error case)
+                    const performanceElement = document.getElementById('last-response-time');
+                    if (performanceElement) {
+                        performanceElement.innerHTML = `<span class="text-red-600">${responseTime} seconds (error)</span>`;
+                    }
+                    
+                    this.addMessage('assistant', `⚠️ There was an error looking up ${sku}. ${error.message || 'Please try again.'}<br><div class="mt-2 text-xs text-gray-500">📊 Response time: ${responseTime} seconds (network error)</div>`);
                 }
                 
                 this.isLoading = false;
             }
 
-            displayInventoryResult(data) {
+            displayInventoryResult(data, responseTime) {
                 const sku = data.sku;
                 
                 // Generate summary based on available data
@@ -356,6 +376,10 @@
                         <div class="mt-4 p-3 bg-white rounded border-l-4 border-blue-500">
                             <strong class="text-gray-700">Summary:</strong>
                             <span class="text-gray-600">${summary}</span>
+                        </div>
+                        
+                        <div class="mt-2 text-xs text-gray-500">
+                            📊 Response time: ${responseTime} seconds
                         </div>
                     </div>
                 `;
