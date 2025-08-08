@@ -33,135 +33,247 @@ Internet → ASUS Router (216.176.21.86) → IBM i System (10.0.0.7)
 
 ---
 
-## Troubleshooting Steps Performed
+## Terminal-Specific Command Sequences
 
-### Step 1: Verify Network Connectivity
+### Terminal 1: Local Mac (Your Computer)
 ```bash
-# Test from local network
-telnet 10.0.0.7 23  # Works - IBM i is accessible internally
+# Test connection to old IP (this will timeout)
+robertsher@MacBookPro ~ % telnet 66.230.69.194 23
+# Result: Timeout - IP no longer valid
 
-# Test from Fly.io
-curl https://wc-ducomb.fly.dev/api/inventory/health
-# Result: {"ibm_connection": false}
+# Test connection to current router IP (WORKS after fix)
+robertsher@MacBookPro ~ % telnet 216.176.21.86 23
+# Result: Connected! Shows IBM i login screen
+
+# Test internal connection (only works on local network)
+robertsher@MacBookPro ~ % telnet 10.0.0.7 23
+# Result: Connected if on local network
+
+# Test Fly.io app health
+robertsher@MacBookPro ~ % curl https://wc-ducomb.fly.dev/api/inventory/health
+# Result: {"ibm_connection": false} before fix, true after
+
+# Check Fly.io configuration
+robertsher@MacBookPro ~ % flyctl ips list -a wc_ducomb
+# Result: Shows 66.241.125.125 (inbound only)
+
+# Connect to Fly.io container
+robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
 ```
 
-### Step 2: Check Fly.io IP Addresses
+### Terminal 2: Inside Fly.io Container
 ```bash
-# Check what IPs Fly.io is using
-flyctl ips list -a wc_ducomb
-# Shows: 66.241.125.125 (inbound only)
+# After running: flyctl ssh console -a wc_ducomb
+root@185e777a160128:/app# 
 
-# SSH into Fly.io container
-flyctl ssh console -a wc_ducomb
-
-# Check actual outbound IP
-curl -4 ifconfig.me
+# Check outbound IPv4 address
+root@185e777a160128:/app# curl -4 ifconfig.me
 # Result: 69.31.3.78
+
+# Check IPv6 address (if curious)
+root@185e777a160128:/app# curl ifconfig.me
+# Result: 2605:4c40:118:603b:0:d6e2:3f4:1
+
+# Install telnet for testing (if needed)
+root@185e777a160128:/app# apt-get update && apt-get install -y telnet
+
+# Test connection to IBM i (after updating to correct IP)
+root@185e777a160128:/app# telnet 216.176.21.86 23
+# Should connect after fix
+
+# Exit container
+root@185e777a160128:/app# exit
 ```
 
-### Step 3: Investigate IBM i Configuration
-
-Searched extensively on IBM i system but found NO IP filtering configured there:
-
-#### Commands Used on IBM i:
-```
-WRKTCPSTS         # Work with TCP/IP Status
-CFGTCP            # Configure TCP/IP
-GO TCPADM         # TCP/IP Administration menu
-WRKREGINF         # Work with Registration Information
-WRKTCPPTKR        # (Command not found - packet rules not available)
-```
-
-#### Checked IBM i Components:
-- TCP/IP configuration
-- TELNET server settings (CHGTELSVR)
-- Exit programs (QIBM_QTG_DEVINIT, QIBM_QTG_DEVTERM)
-- System values (QRMTSIGN)
-- Data areas in AKTSUPPORT library
-- Startup programs (WCOSTRUP)
-
-**Result**: No IP filtering found on IBM i system
-
-### Step 4: Investigate ASUS Router Configuration
-
-#### SSH Access to Router:
+### Terminal 3: ASUS Router SSH Session
 ```bash
-# Enable SSH in router (Admin → System → Service)
-# SSH Port: 1024, Allow Password Login: Yes
+# Connect to router (from Mac terminal)
+robertsher@MacBookPro ~ % ssh -p 1024 sducomb@10.0.0.1
+# Enter password when prompted
 
-# Connect to router
-ssh -p 1024 sducomb@10.0.0.1
-```
+# Once connected:
+sducomb@wcd_router:/tmp/home/root# 
 
-#### Key iptables Discovery:
-```bash
-# Check NAT rules
-iptables -t nat -L VSERVER -n -v --line-numbers
-
-# Found:
-Chain VSERVER (1 references)
-num   pkts bytes target     prot opt in     out     source               destination
-1        0     0 DNAT       tcp  --  *      *       66.230.69.194        0.0.0.0/0            tcp dpt:4433 to:10.0.0.7:4433
-4        0     0 DNAT       tcp  --  *      *       69.31.3.78           0.0.0.0/0            tcp dpt:23 to:10.0.0.7
-```
-
-The rule shows port 23 is restricted to connections FROM source IP `69.31.3.78` only!
-
-### Step 5: Check Router WAN IP
-```bash
-# On router
-ip addr show eth0
+# Check router's WAN IP
+sducomb@wcd_router:/tmp/home/root# ip addr show eth0 | grep inet
 # Result: inet 216.176.21.86/30
 
-# The WAN IP had changed from 66.230.69.194 to 216.176.21.86!
+# View all NAT rules
+sducomb@wcd_router:/tmp/home/root# iptables -t nat -L -n -v
+
+# View port forwarding rules specifically
+sducomb@wcd_router:/tmp/home/root# iptables -t nat -L VSERVER -n -v --line-numbers
+
+# Check if packets are hitting rules (clear counters first)
+sducomb@wcd_router:/tmp/home/root# iptables -t nat -Z VSERVER
+# Then test connection from Mac, then check counters again:
+sducomb@wcd_router:/tmp/home/root# iptables -t nat -L VSERVER -n -v --line-numbers
+
+# Exit router SSH
+sducomb@wcd_router:/tmp/home/root# exit
+```
+
+### Terminal 4: IBM i Green Screen (via telnet)
+```bash
+# Connect from Mac
+robertsher@MacBookPro ~ % telnet 216.176.21.86 23
+
+# You'll see:
+Connected to 216.176.21.86.
+Escape character is '^]'.
+
+                      **             Sign On             ** 
+                                               System  . . . . . :   S7891490 
+                                               Subsystem . . . . :   QINTER     
+                                               Display . . . . . :   QPADEV0024 
+
+# IBM i Commands used during investigation:
+WRKTCPSTS         # Work with TCP/IP Status
+CFGTCP            # Configure TCP/IP  
+GO TCPADM         # TCP/IP Administration menu
+WRKREGINF         # Work with Registration Information
+WRKMBRPDM FILE(QGPL/QCLSRC)  # Check startup programs
+WRKOBJ *ALL/IP* *FILE         # Search for IP-related files
+WRKOBJ *ALL/IP* *DTAARA       # Search for IP-related data areas
+DSPDTAARA DTAARA(AKTSUPPORT/REMOTIP)  # Display data area contents
+
+# Exit telnet session: Ctrl+] then type 'quit'
 ```
 
 ---
 
-## The Solution
+## Troubleshooting Steps Performed (Detailed)
 
-### Problem Identified:
-The ASUS router's port forwarding rule for port 23 (ISERIES) had a **Source IP restriction** set to the old Fly.io IP (`69.31.3.73`), which had been automatically updated to `69.31.3.78` but still restricted connections to only that specific IP.
+### Step 1: Initial Problem Discovery
+```bash
+# FROM MAC TERMINAL:
+robertsher@MacBookPro ~ % curl https://wc-ducomb.fly.dev/api/inventory/health
+{"services":{"ibm_connection":false,"p5250":true,"redis":false},"status":"healthy"}
+# Problem confirmed: ibm_connection is false
+```
 
-### Fix Applied:
+### Step 2: Check Fly.io Configuration
+```bash
+# FROM MAC TERMINAL:
+robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
+Connecting to fdaa:c:91cc:a7b:1cb:d6e2:3f4:2... complete
 
-1. **Navigate to Router Port Forwarding**:
-   - Go to: WAN → Virtual Server / Port Forwarding
-   - Find the ISERIES rule (Port 23)
+# NOW IN FLY.IO CONTAINER:
+root@185e777a160128:/app# curl -4 ifconfig.me
+69.31.3.78
+# This is the NEW outbound IP (was 69.31.3.73)
+```
 
-2. **Edit the Rule**:
-   - Click Edit (pencil icon) on ISERIES row
-   - **Clear the Source IP field** (was: 69.31.3.78, now: empty)
-   - Leave other settings:
-     - External Port: 23
-     - Internal Port: (blank/auto)
-     - Internal IP Address: 10.0.0.7
-     - Protocol: TCP
+### Step 3: Investigate Router Configuration
+```bash
+# FROM MAC TERMINAL:
+robertsher@MacBookPro ~ % ssh -p 1024 sducomb@10.0.0.1
 
-3. **Apply Changes**:
-   - Click OK
-   - Click Apply
+# NOW IN ROUTER:
+sducomb@wcd_router:/tmp/home/root# iptables -t nat -L VSERVER -n -v --line-numbers
+Chain VSERVER (1 references)
+num   pkts bytes target     prot opt in     out     source               destination
+4        0     0 DNAT       tcp  --  *      *       69.31.3.78           0.0.0.0/0            tcp dpt:23 to:10.0.0.7
+# Found the rule! It only accepts from 69.31.3.78
 
-### Result:
-- Port 23 now accepts connections from ANY IP address
-- Prevents future issues when Fly.io's IP changes
-- Allows testing from any location
+sducomb@wcd_router:/tmp/home/root# ip addr show eth0 | grep inet
+    inet 216.176.21.86/30 brd 216.176.21.87 scope global eth0
+# Router WAN IP is 216.176.21.86, NOT 66.230.69.194!
+```
 
 ---
 
-## Application Configuration Updates Required
+## The Solution (Step-by-Step)
 
-### Update IBM i Host Address:
-The application needs to be updated to use the correct WAN IP:
-- **Old**: `66.230.69.194` (no longer valid)
-- **New**: `216.176.21.86` (current router WAN IP)
+### Via ASUS Router Web Interface:
 
-### Environment Variables to Update:
-Check and update these in your Fly.io configuration:
+1. **Access Router Web Interface**:
+   - Open browser to: http://10.0.0.1
+   - Login with credentials
+
+2. **Navigate to Port Forwarding**:
+   - Click: WAN → Virtual Server / Port Forwarding
+   - Find the ISERIES rule (Port 23)
+   - Note the Source IP field shows: 69.31.3.78
+
+3. **Edit the Rule**:
+   - Click Edit (pencil icon) on ISERIES row
+   - **Clear the Source IP field completely** (delete 69.31.3.78)
+   - Leave all other settings:
+     - Service Name: ISERIES
+     - Protocol: TCP
+     - External Port: 23
+     - Internal Port: (leave blank)
+     - Internal IP Address: 10.0.0.7
+
+4. **Save Changes**:
+   - Click OK in the dialog
+   - Click Apply on the main page
+   - Wait for router to apply changes
+
+5. **Verify Fix**:
 ```bash
-flyctl secrets list -a wc_ducomb
-# Update any that reference the old IP
-flyctl secrets set IBM_HOST=216.176.21.86 -a wc_ducomb
+# FROM MAC TERMINAL:
+robertsher@MacBookPro ~ % telnet 216.176.21.86 23
+Trying 216.176.21.86...
+Connected to 216.176.21.86.
+# SUCCESS! IBM i login screen appears
+```
+
+---
+
+## Application Updates Required
+
+### Update Fly.io Environment Variables:
+```bash
+# FROM MAC TERMINAL:
+# Check current secrets
+robertsher@MacBookPro ~ % flyctl secrets list -a wc_ducomb
+
+# Update IBM i host IP
+robertsher@MacBookPro ~ % flyctl secrets set IBM_HOST=216.176.21.86 -a wc_ducomb
+
+# Verify the change
+robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
+root@185e777a160128:/app# echo $IBM_HOST
+216.176.21.86
+
+# Test the connection
+root@185e777a160128:/app# telnet $IBM_HOST 23
+# Should connect successfully
+```
+
+### Update Application Code:
+If the IP is hardcoded anywhere in the application, update it:
+- Search for: `66.230.69.194`
+- Replace with: `216.176.21.86`
+- Or better: Use environment variable `$IBM_HOST`
+
+---
+
+## Verification Tests
+
+### After applying the fix, run these tests:
+
+```bash
+# 1. FROM MAC - Test direct connection
+robertsher@MacBookPro ~ % telnet 216.176.21.86 23
+# Expected: Connected, shows IBM i login
+
+# 2. FROM MAC - Test Fly.io health check
+robertsher@MacBookPro ~ % curl https://wc-ducomb.fly.dev/api/inventory/health
+# Expected: {"ibm_connection": true}
+
+# 3. FROM MAC - Test inventory lookup
+robertsher@MacBookPro ~ % curl -X POST https://wc-ducomb.fly.dev/api/inventory/lookup \
+  -H "Content-Type: application/json" \
+  -d '{"sku": "lov224006"}'
+# Expected: Returns inventory data
+
+# 4. FROM FLY.IO CONTAINER - Test connection
+robertsher@MacBookPro ~ % flyctl ssh console -a wc_ducomb
+root@185e777a160128:/app# telnet 216.176.21.86 23
+# Expected: Connected to IBM i
 ```
 
 ---
@@ -184,93 +296,56 @@ flyctl secrets set IBM_HOST=216.176.21.86 -a wc_ducomb
 Key places to check in ASUS routers:
 - WAN → Virtual Server / Port Forwarding (for port rules)
 - Firewall → General (for IP filtering)
-- Administration → System (for SSH access)
+- Administration → System → Service (for SSH access)
 - System Log (for connection attempts)
 
-### 4. Troubleshooting Tools
-
-#### From Mac/Linux:
-```bash
-telnet <ip> <port>           # Test TCP connectivity
-nc -zv <ip> <port>           # Test port connectivity
-curl -v telnet://<ip>:<port> # Test with timeout
-```
-
-#### From Router (via SSH):
-```bash
-iptables -L -n -v            # List all firewall rules
-iptables -t nat -L -n -v     # List NAT/port forwarding rules
-ip addr show                 # Show all IP addresses
-```
-
-#### From Fly.io:
-```bash
-flyctl ssh console -a <app-name>
-curl -4 ifconfig.me          # Check IPv4 address
-curl ifconfig.me             # Check IPv6 address
-```
+### 4. Always Test From Multiple Locations
+- Local network (proves IBM i is working)
+- External network (proves port forwarding)
+- From the actual application (proves end-to-end)
 
 ---
 
-## Preventive Measures
+## Quick Reference
 
-### 1. Remove Source IP Restrictions
-Unless absolutely necessary for security, don't restrict port forwarding rules to specific source IPs.
-
-### 2. Use Dynamic DNS
-Set up DDNS to handle WAN IP changes:
-- Configure in router: WAN → DDNS
-- Use the DDNS hostname instead of IP in applications
-
-### 3. Monitor Connectivity
-Add monitoring to detect connection failures:
-```javascript
-// In your application
-setInterval(async () => {
-  const health = await checkIBMConnection();
-  if (!health) {
-    console.error('IBM i connection lost');
-    // Send alert
-  }
-}, 60000); // Check every minute
+### Key IP Addresses:
+```
+Router WAN IP:        216.176.21.86
+Router LAN IP:        10.0.0.1
+IBM i Internal IP:    10.0.0.7
+Fly.io Inbound IP:    66.241.125.125
+Fly.io Outbound IP:   69.31.3.78 (can change!)
+Old WAN IP (dead):    66.230.69.194
 ```
 
-### 4. Document Network Configuration
-Maintain a network diagram showing:
-- All IP addresses (internal and external)
-- Port forwarding rules
-- Firewall rules
-- Which components can change
-
----
-
-## Quick Reference Commands
-
-### Test IBM i Connection:
+### Test Commands:
 ```bash
-# From anywhere
+# Test IBM i from anywhere
 telnet 216.176.21.86 23
 
-# From Fly.io app
+# Test from Fly.io
 curl https://wc-ducomb.fly.dev/api/inventory/health
-```
 
-### Access Router:
-```bash
-# Web interface
-http://10.0.0.1
-
-# SSH
+# SSH to router
 ssh -p 1024 sducomb@10.0.0.1
+
+# SSH to Fly.io
+flyctl ssh console -a wc_ducomb
 ```
 
-### Check Current IPs:
+### Router iptables Commands:
 ```bash
-# Router WAN IP
-ssh -p 1024 sducomb@10.0.0.1 'ip addr show eth0'
+# View all NAT rules
+iptables -t nat -L -n -v
 
-# Fly.io outbound IP
-flyctl ssh console -a wc_ducomb -C 'curl -4 ifconfig.me'
+# View port forwarding rules
+iptables -t nat -L VSERVER -n -v --line-numbers
+
+# Clear packet counters
+iptables -t nat -Z VSERVER
+
+# Check router's WAN IP
+ip addr show eth0 | grep inet
 ```
 
 ---
@@ -278,10 +353,13 @@ flyctl ssh console -a wc_ducomb -C 'curl -4 ifconfig.me'
 ## Contact Information
 
 - **Router Admin**: sducomb
+- **Router SSH Port**: 1024
 - **IBM i System**: 10.0.0.7 (WCDUCOMB)
+- **System Name**: S7891490
 - **Fly.io App**: wc-ducomb.fly.dev
+- **GitHub Repo**: 1genadam/wc_ducomb
 
 ---
 
 *Document created: August 8, 2025*
-*Last updated: August 8, 2025*
+*Last updated: August 8, 2025 - Added terminal-specific command sequences and verification tests*
