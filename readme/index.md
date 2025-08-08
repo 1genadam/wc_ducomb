@@ -17,6 +17,10 @@ This repository serves as a comprehensive knowledge base for IBM i systems, 5250
 - **[production-status-2025-08-07.md](production-status-2025-08-07.md)** - 🎉 **2025-08-07** BREAKTHROUGH: Network connectivity established, system status update
 - **[manual-testing-procedures-2025-08-08.md](manual-testing-procedures-2025-08-08.md)** - 📋 **2025-08-08** Complete manual testing procedures for production validation
 
+### Network Architecture & Performance Analysis
+- **[network-architecture-analysis-2025-08-08.md](network-architecture-analysis-2025-08-08.md)** - 🔍 **2025-08-08** Container networking analysis: IP mismatch resolution and firewall configuration
+- **[p5250-performance-analysis-2025-08-08.md](p5250-performance-analysis-2025-08-08.md)** - ⚡ **2025-08-08** P5250 protocol performance deep dive and optimization strategy
+
 ### 5250 Protocol Automation
 - **[5250-protocol-breakthrough-validated.md](5250-protocol-breakthrough-validated.md)** - Successful 5250 protocol implementation
 - **[5250-protocol-access-methods.md](5250-protocol-access-methods.md)** - Technical implementation of 5250 navigation
@@ -123,21 +127,21 @@ This repository serves as a comprehensive knowledge base for IBM i systems, 5250
 ## 🔧 **CURRENT SESSION STATUS - COOKIE CRUMB**
 
 ### **🍪 WHERE WE LEFT OFF - 2025-08-08**
-**CURRENT ISSUE:** IP Address Change - Firewall Update Required
+**CURRENT STATUS:** Network Architecture Resolved - Performance Optimization Opportunity Identified
 
 **System Status Confirmed:**
 - ✅ **Frontend**: https://wc-ducomb.fly.dev/ fully operational and responsive
 - ✅ **Backend API**: Healthy and properly deployed with timeout handling
-- ✅ **Architecture**: All services stable after robust startup script implementation
-- ❌ **Network**: Outbound IP `69.31.3.78` blocked by IBM i firewall (connection error 11)
-- 📋 **Manual Testing Ready**: Complete step-by-step procedures documented
+- ✅ **Network**: Container networking analysis complete - dual firewall rules implemented
+- ✅ **Connectivity**: Direct Python API working (BLO150197: 16.0 EA available)
+- ⏳ **Proxy Layer**: Node.js timeout configuration needs adjustment
 
-**Root Cause Analysis:**
-- **Previous Working IP**: `69.31.3.73` (confirmed 6.2ms response time on 2025-08-07)
-- **Current Blocked IP**: `69.31.3.78` (blocked - connection fails with error 11)
-- **Cause**: Machine recreation during service stability improvements changed outbound IP
-- **Impact**: Python API backend times out connecting to IBM i after 15-second timeout
-- **Architecture**: Proven sound - breakthrough achieved earlier, just needs IP update
+**Root Cause Analysis Complete:**
+- **Network Issue**: ✅ **RESOLVED** - Container IP `172.19.17.146` vs External IP `69.31.3.78` mismatch
+- **Firewall Solution**: Dual ISERIES rules handle both IP sources successfully
+- **Load Balancer**: ✅ **Working correctly** - was never the issue
+- **Current Bottleneck**: Node.js proxy middleware timeout (not network or firewall)
+- **Performance Insight**: 20-second response time is P5250 protocol overhead, not network latency
 
 **Testing Documentation Created:**
 - **[manual-testing-procedures-2025-08-08.md](manual-testing-procedures-2025-08-08.md)** provides complete step-by-step validation procedures
@@ -146,10 +150,10 @@ This repository serves as a comprehensive knowledge base for IBM i systems, 5250
 - Performance benchmarks and monitoring commands included
 
 **Next Actions:**
-1. **Update IBM i Firewall**: Replace `69.31.3.73` with `69.31.3.78` in whitelist
-2. **Execute Manual Tests**: Follow documented procedures to validate restoration
-3. **Test Target SKU**: Validate `lov224006` lookup functionality
-4. **Document Results**: Update testing log with actual performance metrics
+1. **Fix Node.js Proxy Timeout**: Increase middleware timeout to handle 20s+ P5250 responses
+2. **Validate Full Proxy Chain**: Test BLO150197 lookup through complete architecture
+3. **Document Performance Optimization**: Implement session persistence for 90% speed improvement
+4. **Consider VPN Implementation**: For operational simplicity (not performance gains)
 
 **Testing Commands:**
 ```bash
