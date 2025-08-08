@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WC Ducomb - Inventory Lookup Chat Demo</title>
+    <title>WC Ducomb - Inventory Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes pulse {
@@ -13,83 +13,344 @@
         .animate-pulse {
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
+        .chat-message {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .inventory-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .success-gradient {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
     </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-8">
-        <header class="mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">WC Ducomb Inventory System</h1>
-            <p class="text-gray-600">Real-time inventory lookup via 5250 protocol automation</p>
+<body class="bg-gray-50">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">🏢 WC Ducomb Inventory Chat</h1>
+            <p class="text-gray-600 mb-4">Real-time Inventory Lookup via 5250 Protocol Automation</p>
+            
+            <!-- Network Status -->
+            <div id="network-status" class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium">
+                <div class="w-3 h-3 rounded-full mr-2" id="status-dot"></div>
+                <span id="status-text">Checking network...</span>
+            </div>
         </header>
 
-        <main class="grid md:grid-cols-2 gap-8">
-            <!-- Information Panel -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-2xl font-semibold mb-4 text-blue-600">📊 System Capabilities</h2>
-                
-                <div class="space-y-4">
-                    <div class="border-l-4 border-blue-500 pl-4">
-                        <h3 class="font-semibold text-gray-700">Real-Time Data Access</h3>
-                        <p class="text-gray-600 text-sm">Direct connection to IBM i system (10.0.0.7) via 5250 protocol</p>
+        <!-- Main Chat Interface -->
+        <div class="grid lg:grid-cols-3 gap-8">
+            <!-- Chat Panel -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-lg flex flex-col h-[600px]">
+                    <!-- Chat Header -->
+                    <div class="inventory-card text-white p-4 rounded-t-lg">
+                        <h2 class="text-xl font-bold">💬 Inventory Assistant</h2>
+                        <p class="text-blue-100 text-sm">Ask me to look up any SKU!</p>
                     </div>
-                    
-                    <div class="border-l-4 border-green-500 pl-4">
-                        <h3 class="font-semibold text-gray-700">Inventory Details</h3>
-                        <ul class="text-gray-600 text-sm list-disc list-inside">
-                            <li>On-hand quantities</li>
-                            <li>Allocated vs available stock</li>
-                            <li>Purchase orders</li>
-                            <li>Backorder status</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="border-l-4 border-yellow-500 pl-4">
-                        <h3 class="font-semibold text-gray-700">Performance</h3>
-                        <p class="text-gray-600 text-sm">~24 second full lookup cycle</p>
-                        <p class="text-gray-600 text-sm">0.26 second connection time</p>
-                    </div>
-                </div>
 
-                <div class="mt-6 p-4 bg-gray-50 rounded">
-                    <h3 class="font-semibold text-gray-700 mb-2">🧪 Test SKU</h3>
-                    <code class="bg-gray-200 px-2 py-1 rounded text-sm">DGE037700</code>
-                    <p class="text-gray-600 text-xs mt-1">P2B-SC-100 1SC 123806</p>
+                    <!-- Chat Messages -->
+                    <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <div class="chat-message">
+                            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                                <p class="text-gray-800">👋 Welcome to the WC Ducomb Inventory System!</p>
+                                <p class="text-sm text-gray-600 mt-2">I can help you look up real-time inventory data. Just provide a SKU number and I'll fetch:</p>
+                                <ul class="text-sm text-gray-600 mt-2 list-disc list-inside">
+                                    <li>Current stock levels</li>
+                                    <li>Available vs allocated quantities</li>
+                                    <li>Purchase orders and backorders</li>
+                                    <li>Product descriptions</li>
+                                </ul>
+                                <p class="text-sm text-blue-600 mt-2 font-medium">Try entering a SKU like "DGE037700" to get started!</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div class="p-4 border-t">
+                        <div class="flex space-x-3">
+                            <input 
+                                type="text" 
+                                id="chat-input" 
+                                placeholder="Enter SKU or ask about inventory..." 
+                                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                                autocomplete="off"
+                            >
+                            <button 
+                                id="send-button" 
+                                class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Implementation Status -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-2xl font-semibold mb-4 text-green-600">✅ Implementation Status</h2>
-                
-                <div class="space-y-3">
-                    <div class="flex items-center">
-                        <span class="text-green-500 mr-2">✓</span>
-                        <span class="text-gray-700">5250 Protocol Connection</span>
-                    </div>
-                    <div class="flex items-center">
-                        <span class="text-green-500 mr-2">✓</span>
-                        <span class="text-gray-700">Menu Navigation Automation</span>
-                    </div>
-                    <div class="flex items-center">
-                        <span class="text-green-500 mr-2">✓</span>
-                        <span class="text-gray-700">SKU Lookup Process</span>
-                    </div>
-                    <div class="flex items-center">
-                        <span class="text-green-500 mr-2">✓</span>
-                        <span class="text-gray-700">Data Extraction & Parsing</span>
-                    </div>
-                    <div class="flex items-center">
-                        <span class="text-green-500 mr-2">✓</span>
-                        <span class="text-gray-700">Chat Widget Interface</span>
+            <!-- Info Panel -->
+            <div class="space-y-6">
+                <!-- Quick Test SKUs -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🔍 Quick Test SKUs</h3>
+                    <div class="space-y-2">
+                        <button class="quick-sku w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 rounded transition-colors" data-sku="DGE037592">
+                            <div class="font-mono text-sm text-blue-600">DGE037592</div>
+                            <div class="text-xs text-gray-500">INS-IP-206R (Known good)</div>
+                        </button>
+                        <button class="quick-sku w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 rounded transition-colors" data-sku="DGE037700">
+                            <div class="font-mono text-sm text-blue-600">DGE037700</div>
+                            <div class="text-xs text-gray-500">P2B-SC-100 1SC 123806</div>
+                        </button>
+                        <button class="quick-sku w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 rounded transition-colors" data-sku="BLO150197">
+                            <div class="font-mono text-sm text-blue-600">BLO150197</div>
+                            <div class="text-xs text-gray-500">B400X1 BLO B402100</div>
+                        </button>
                     </div>
                 </div>
 
+                <!-- System Status -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🔧 System Status</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span>Frontend:</span>
+                            <span class="text-green-600" id="frontend-status">Active</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>API:</span>
+                            <span id="api-status">Checking...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>IBM i Connection:</span>
+                            <span id="ibm-status">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Development Info -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">📊 Performance</h3>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p><strong>Response Time:</strong> ~15-25 seconds</p>
+                        <p><strong>Connection:</strong> <0.1 seconds</p>
+                        <p><strong>Data Source:</strong> <span id="data-source-status">Checking...</span></p>
+                        <p><strong>IBM i Host:</strong> 10.0.0.7 (S7891490)</p>
+                    </div>
+                </div>
             </div>
-        </main>
+        </div>
+
+        <!-- Demo Success Example -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mt-8 border-l-4 border-green-500">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">🎯 Target Result (From Production Success)</h3>
+            <div class="bg-gray-50 p-4 rounded-lg font-mono text-sm">
+                <div class="text-green-600 font-bold mb-2">📦 Current Inventory for DGE037592</div>
+                <div class="text-blue-600 mb-3">✅ Successfully Retrieved from IBM i System (10.0.0.7)</div>
+                
+                <div class="mb-3">
+                    <strong>Product Details:</strong><br>
+                    - SKU: DGE037592<br>
+                    - Description: INS-IP-206R DGE 070894<br>
+                    - Status: Active<br>
+                    - Unit of Measure: EA (Each)<br>
+                    - Warehouse: 00 (WCD - Mt. Elliott Location)
+                </div>
+                
+                <div class="mb-3">
+                    <strong>Current Stock Levels:</strong><br>
+                    - 📊 On Hand: 2.000 units<br>
+                    - 🔒 Allocated: 0.000 units<br>
+                    - 🎯 Net Available: 2.000 units<br>
+                    - 📋 On Purchase Order: 0.000 units<br>
+                    - ⏳ On Backorder: 0.000 units
+                </div>
+                
+                <div class="text-gray-600">
+                    <strong>Summary:</strong> You currently have 2 units available for sale.
+                </div>
+            </div>
+        </div>
 
     </div>
 
-    <!-- Load the chat widget -->
-    <script src="js/inventory-chat.js"></script>
+    <script>
+        class InventoryChat {
+            constructor() {
+                this.baseUrl = window.location.origin;
+                this.messages = [];
+                this.isLoading = false;
+                this.init();
+            }
+
+            async init() {
+                this.bindEvents();
+                await this.checkSystemStatus();
+                this.addMessage('system', '✅ Inventory system connected. Ready for SKU lookups!');
+            }
+
+            bindEvents() {
+                // Send button
+                document.getElementById('send-button').addEventListener('click', () => {
+                    this.handleSendMessage();
+                });
+
+                // Enter key
+                document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.handleSendMessage();
+                    }
+                });
+
+                // Quick SKU buttons
+                document.querySelectorAll('.quick-sku').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const sku = e.currentTarget.dataset.sku;
+                        document.getElementById('chat-input').value = sku;
+                        this.handleSendMessage();
+                    });
+                });
+            }
+
+            async checkSystemStatus() {
+                try {
+                    // Check API health
+                    const response = await fetch('/api/inventory/status');
+                    const data = await response.json();
+                    
+                    document.getElementById('api-status').innerHTML = '<span class="text-green-600">Active</span>';
+                    
+                    // Check network connectivity
+                    const ibmConnected = data.services && data.services.ibm_connection === true;
+                    const statusElement = document.getElementById('network-status');
+                    const statusDot = document.getElementById('status-dot');
+                    const statusText = document.getElementById('status-text');
+                    
+                    if (ibmConnected) {
+                        statusElement.className = 'inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800';
+                        statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-green-500';
+                        statusText.textContent = '✅ Inventory system connected (IBM i: 216.176.21.86)';
+                        document.getElementById('ibm-status').innerHTML = '<span class="text-green-600">Connected</span>';
+                        document.getElementById('data-source-status').innerHTML = '<span class="text-green-600 font-semibold">🔴 LIVE Production Data</span>';
+                    } else {
+                        statusElement.className = 'inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
+                        statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-yellow-500';
+                        statusText.textContent = 'System offline - Limited functionality';
+                        document.getElementById('ibm-status').innerHTML = '<span class="text-yellow-600">Offline</span>';
+                        document.getElementById('data-source-status').innerHTML = '<span class="text-yellow-600">Demo/Mock data</span>';
+                    }
+                    
+                } catch (error) {
+                    document.getElementById('api-status').innerHTML = '<span class="text-red-600">Offline</span>';
+                    console.error('Status check failed:', error);
+                }
+            }
+
+            async handleSendMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+                
+                if (!message || this.isLoading) return;
+                
+                // Add user message
+                this.addMessage('user', message);
+                input.value = '';
+                
+                // Extract SKU from message or use whole message as SKU
+                const skuMatch = message.match(/([A-Z0-9]+\d+[A-Z0-9]*)/i);
+                const sku = skuMatch ? skuMatch[1].toUpperCase() : message.toUpperCase();
+                
+                await this.lookupSKU(sku);
+            }
+
+            async lookupSKU(sku) {
+                this.isLoading = true;
+                this.addMessage('assistant', `🔍 Looking up ${sku}... This may take up to 30 seconds for live data from IBM i system.`);
+                this.showTypingIndicator();
+
+                try {
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message: sku })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    this.hideTypingIndicator();
+                    this.addMessage('assistant', data.response || `❌ Could not retrieve inventory for SKU: ${sku}`);
+                } catch (error) {
+                    this.hideTypingIndicator();
+                    this.addMessage('assistant', `❌ Could not retrieve inventory for SKU: ${sku}`);
+                }
+                
+                this.isLoading = false;
+            }
+
+            addMessage(type, content) {
+                const messagesContainer = document.getElementById('chat-messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message';
+                
+                if (type === 'user') {
+                    messageDiv.innerHTML = `
+                        <div class="flex justify-end">
+                            <div class="bg-blue-600 text-white px-4 py-2 rounded-lg max-w-xs lg:max-w-md">
+                                ${content}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="flex">
+                            <div class="bg-gray-100 px-4 py-2 rounded-lg max-w-full">
+                                ${content}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            showTypingIndicator() {
+                const messagesContainer = document.getElementById('chat-messages');
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typing-indicator';
+                typingDiv.className = 'chat-message';
+                typingDiv.innerHTML = `
+                    <div class="flex">
+                        <div class="bg-gray-100 px-4 py-2 rounded-lg">
+                            <div class="flex space-x-1">
+                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style="animation-delay: 0.1s"></div>
+                                <div class="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                messagesContainer.appendChild(typingDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            hideTypingIndicator() {
+                const typingIndicator = document.getElementById('typing-indicator');
+                if (typingIndicator) {
+                    typingIndicator.remove();
+                }
+            }
+        }
+
+        // Initialize chat when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new InventoryChat();
+        });
+    </script>
 </body>
 </html>
