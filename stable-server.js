@@ -23,6 +23,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint with network detection
 app.get('/health', (req, res) => {
+    // Get IBM connection details from environment variables
+    const IBM_HOST = process.env.IBM_HOST || '10.0.0.7';
+    const IBM_PORT = parseInt(process.env.IBM_PORT) || 23;
+    
     const checkIBMConnection = () => {
         return new Promise((resolve) => {
             const socket = new net.Socket();
@@ -38,7 +42,7 @@ app.get('/health', (req, res) => {
             socket.on('error', () => {
                 resolve(false);
             });
-            socket.connect(23, '10.0.0.7');
+            socket.connect(IBM_PORT, IBM_HOST);
         });
     };
     
