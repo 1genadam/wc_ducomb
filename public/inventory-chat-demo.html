@@ -223,8 +223,8 @@
                     
                     document.getElementById('api-status').innerHTML = '<span class="text-green-600">Active</span>';
                     
-                    // Check network connectivity
-                    const ibmConnected = data.services && data.services.ibm_connection === true;
+                    // Check network connectivity - updated to match actual API response
+                    const ibmConnected = data.connected === true || (data.services && data.services.ibm_connection === true);
                     const statusElement = document.getElementById('network-status');
                     const statusDot = document.getElementById('status-dot');
                     const statusText = document.getElementById('status-text');
@@ -232,7 +232,7 @@
                     if (ibmConnected) {
                         statusElement.className = 'inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-800';
                         statusDot.className = 'w-3 h-3 rounded-full mr-2 bg-green-500';
-                        statusText.textContent = '✅ Inventory system connected (IBM i: 216.176.21.86)';
+                        statusText.textContent = `✅ Inventory system connected (IBM i: ${data.host || '216.176.21.86'})`;
                         document.getElementById('ibm-status').innerHTML = '<span class="text-green-600">Connected</span>';
                         document.getElementById('data-source-status').innerHTML = '<span class="text-green-600 font-semibold">🔴 LIVE Production Data</span>';
                     } else {
@@ -268,6 +268,7 @@
 
             async lookupSKU(sku) {
                 this.isLoading = true;
+                const startTime = performance.now();
                 this.addMessage('assistant', `🔍 Looking up ${sku}... This may take up to 30 seconds for live data from IBM i system.`);
                 this.showTypingIndicator();
 
@@ -280,13 +281,24 @@
                         body: JSON.stringify({ message: sku })
                     });
                     
+                    const endTime = performance.now();
+                    const responseTime = ((endTime - startTime) / 1000).toFixed(2);
+                    
                     const data = await response.json();
                     
                     this.hideTypingIndicator();
-                    this.addMessage('assistant', data.response || `❌ Could not retrieve inventory for SKU: ${sku}`);
+                    
+                    if (data.response && !data.response.includes('Could not retrieve')) {
+                        this.addMessage('assistant', `${data.response}<br><div class="mt-2 text-xs text-gray-500">📊 Response time: ${responseTime} seconds</div>`);
+                    } else {
+                        this.addMessage('assistant', `❌ Could not retrieve inventory for SKU: ${sku}<br><div class="mt-2 text-xs text-gray-500">📊 Response time: ${responseTime} seconds (timeout or error)</div>`);
+                    }
                 } catch (error) {
+                    const endTime = performance.now();
+                    const responseTime = ((endTime - startTime) / 1000).toFixed(2);
                     this.hideTypingIndicator();
-                    this.addMessage('assistant', `❌ Could not retrieve inventory for SKU: ${sku}`);
+                    this.addMessage('assistant', `❌ Could not retrieve inventory for SKU: ${sku}<br><div class="mt-2 text-xs text-gray-500">📊 Response time: ${responseTime} seconds (network error)</div>`);
+                    console.error('Lookup error:', error);
                 }
                 
                 this.isLoading = false;
