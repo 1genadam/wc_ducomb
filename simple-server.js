@@ -27,9 +27,14 @@ app.get('/local', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'local-chat.html'));
 });
 
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Chat interface: http://localhost:${PORT}/local`);
+    console.log(`Admin dashboard: http://localhost:${PORT}/admin`);
 });
 
 // Keep alive
