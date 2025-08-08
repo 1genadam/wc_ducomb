@@ -136,6 +136,26 @@ class InventoryLookupService:
         self.connected = False
         self.last_connection_attempt = None
         self.connection_lock = Lock()
+        self.network_latency_factor = 1.0  # Adaptive timing multiplier
+        self.connection_failures = 0
+        
+    def adaptive_sleep(self, base_seconds):
+        """Sleep with network latency compensation"""
+        adjusted_time = base_seconds * self.network_latency_factor
+        logger.debug(f"Sleeping for {adjusted_time:.1f}s (base: {base_seconds}s, factor: {self.network_latency_factor:.1f})")
+        time.sleep(adjusted_time)
+        
+    def adjust_network_timing(self, success=True):
+        """Adjust timing based on connection success/failure patterns"""
+        if success:
+            # Gradually reduce latency compensation if connections are working
+            self.network_latency_factor = max(1.0, self.network_latency_factor - 0.1)
+            self.connection_failures = 0
+        else:
+            # Increase latency compensation after failures
+            self.connection_failures += 1
+            self.network_latency_factor = min(3.0, 1.0 + (self.connection_failures * 0.2))
+            logger.info(f"Adjusted network timing factor to {self.network_latency_factor:.1f} after {self.connection_failures} failures")
         
     def connect_with_retry(self, max_retries=3):
         """Connect to IBM i with retry logic"""
@@ -148,14 +168,14 @@ class InventoryLookupService:
                 try:
                     logger.info(f"Connection attempt {attempt + 1} to {IBM_HOST}:{IBM_PORT}")
                     
-                    # Create new client - use the PROVEN working configuration
-                    logger.info("Using proven working P5250Client configuration")
+                    # Create new client with optimized timeouts for internet connections
+                    logger.info("Using optimized P5250Client configuration for internet latency")
                     self.client = P5250Client(
                         hostName=IBM_HOST,
                         hostPort=str(IBM_PORT),
                         modelName='3279-2',
                         enableTLS='no',
-                        timeoutInSec=30
+                        timeoutInSec=60  # Increased from 30 to handle network latency
                     )
                     
                     # Connect with timeout protection
@@ -181,10 +201,10 @@ class InventoryLookupService:
                     connect_thread = threading.Thread(target=connect_with_timeout)
                     connect_thread.daemon = True
                     connect_thread.start()
-                    connect_thread.join(timeout=15)  # 15 second timeout
+                    connect_thread.join(timeout=30)  # Increased to 30 seconds for internet connections
                     
                     if connect_thread.is_alive():
-                        logger.error("Connection attempt timed out after 15 seconds")
+                        logger.error("Connection attempt timed out after 30 seconds")
                         try:
                             self.client.disconnect()
                         except:
@@ -194,6 +214,9 @@ class InventoryLookupService:
                     if not connection_result[0]:
                         error_msg = connection_result[1] or "Connection failed"
                         logger.error(f"Connection failed: {error_msg}")
+                        # Log additional connection details for debugging
+                        logger.error(f"Attempting to connect to {IBM_HOST}:{IBM_PORT}")
+                        logger.error(f"P5250 timeout setting: 60 seconds")
                         raise Exception(f"Connection failed: {error_msg}")
                     
                     # Handle login sequence
@@ -223,10 +246,11 @@ class InventoryLookupService:
             return False
     
     def login_sequence(self):
-        """Handle complete login sequence"""
+        """Handle complete login sequence with adaptive timing"""
         try:
-            # Get initial screen
-            time.sleep(2)
+            # Get initial screen with adaptive timing
+            logger.info("Waiting for initial login screen...")
+            self.adaptive_sleep(4)  # Use adaptive timing
             screen = self.client.getScreen()
             
             if "User" not in screen:
@@ -240,10 +264,11 @@ class InventoryLookupService:
             self.client.sendTab()
             self.client.sendText(PASSWORD)
             self.client.sendEnter()
-            time.sleep(3)
+            logger.info("Credentials sent, waiting for response...")
+            self.adaptive_sleep(5)  # Use adaptive timing for network processing
             
-            # Handle post-login sequence
-            for step in range(5):
+            # Handle post-login sequence with more steps and better timing
+            for step in range(10):  # Increased from 5 to 10 steps
                 screen = self.client.getScreen()
                 screen_upper = screen.upper()
                 
@@ -252,19 +277,19 @@ class InventoryLookupService:
                 if "MESSAGE QUEUE" in screen_upper and "ALLOCATED" in screen_upper:
                     logger.info("Handling message queue allocation")
                     self.client.sendEnter()
-                    time.sleep(2)
+                    time.sleep(3)  # Increased timing
                     continue
                 
                 elif "BEGIN AN A+ SESSION" in screen_upper and "BASE" in screen_upper:
                     logger.info("Confirming Infor base selection")
                     self.client.sendEnter()
-                    time.sleep(3)
+                    time.sleep(4)  # Increased timing for menu loading
                     continue
                 
                 elif "ENVIRONMENT ID" in screen_upper:
                     logger.info("Confirming environment")
                     self.client.sendEnter()
-                    time.sleep(3)
+                    time.sleep(4)  # Increased timing for environment setup
                     continue
                 
                 elif "MAIN MENU" in screen_upper and "INFOR" in screen_upper:
@@ -274,14 +299,26 @@ class InventoryLookupService:
                 elif "PRESS ENTER" in screen_upper:
                     logger.info("Handling press enter prompt")
                     self.client.sendEnter()
+                    time.sleep(3)  # Increased timing
+                    continue
+                
+                # Add more login screen patterns
+                elif "SIGN ON" in screen_upper and "SYSTEM" in screen_upper:
+                    logger.info("Detected sign-on screen, waiting...")
                     time.sleep(2)
+                    continue
+                    
+                elif "LOADING" in screen_upper or "PLEASE WAIT" in screen_upper:
+                    logger.info("System loading, waiting longer...")
+                    time.sleep(5)
                     continue
                 
                 elif any(indicator in screen_upper for indicator in ["NOT VALID", "INVALID", "INCORRECT"]):
                     logger.error("Login failed - invalid credentials")
                     return False
             
-            logger.error("Login sequence did not complete successfully")
+            logger.error(f"Login sequence did not complete successfully after {step + 1} steps")
+            logger.error(f"Final screen content: {screen[:200]}...")
             return False
             
         except Exception as e:
@@ -294,7 +331,7 @@ class InventoryLookupService:
             logger.info("Navigating to Inventory Accounting (Option 2)")
             self.client.sendText("2")
             self.client.sendEnter()
-            time.sleep(3)
+            time.sleep(4)  # Increased timing for menu navigation
             
             screen = self.client.getScreen()
             if "NOT CORRECT" in screen.upper():
@@ -304,7 +341,7 @@ class InventoryLookupService:
             logger.info("Navigating to Item Inquiry (Option 11)")
             self.client.sendText("11")
             self.client.sendEnter()
-            time.sleep(3)
+            time.sleep(4)  # Increased timing for screen loading
             
             screen = self.client.getScreen()
             if "NOT CORRECT" in screen.upper():
@@ -327,7 +364,8 @@ class InventoryLookupService:
             self.client.moveToFirstInputField()
             self.client.sendText(sku.upper())
             self.client.sendEnter()
-            time.sleep(4)  # Allow time for system response
+            logger.info(f"SKU {sku} sent, waiting for response...")
+            time.sleep(6)  # Increased from 4 to 6 seconds for query processing
             
             # Get result screen
             result_screen = self.client.getScreen()
@@ -460,17 +498,27 @@ class InventoryLookupService:
         }
         
         try:
-            # Ensure connection
+            # Ensure connection with detailed logging
             if not self.connected:
+                logger.info(f"Not connected, attempting connection to {IBM_HOST}:{IBM_PORT}")
                 if not self.connect_with_retry():
-                    result["error"] = "Could not connect to inventory system"
+                    error_msg = "Could not connect to inventory system"
+                    logger.error(f"{error_msg} - Host: {IBM_HOST}, Port: {IBM_PORT}")
+                    result["error"] = error_msg
                     update_stats(success=False, error="Connection failed")
                     return result
+                else:
+                    logger.info("Successfully established connection to IBM i")
             
-            # Navigate to inventory inquiry
+            # Navigate to inventory inquiry with better error handling
+            logger.info("Attempting to navigate to inventory inquiry screen")
             if not self.navigate_to_inventory_inquiry():
-                result["error"] = "Could not navigate to inventory inquiry"
+                error_msg = "Could not navigate to inventory inquiry"
+                logger.error(f"{error_msg} - May need to retry connection")
+                result["error"] = error_msg
                 update_stats(success=False, error="Navigation failed")
+                # Mark connection as failed for retry on next request
+                self.connected = False
                 return result
             
             # Perform lookup

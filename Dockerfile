@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     bash \
     iptables \
     iproute2 \
+    net-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Tailscale
@@ -41,7 +42,7 @@ RUN groupadd -g 1001 inventory
 RUN useradd -r -u 1001 -g inventory inventory
 
 # Make scripts executable and fix ownership
-RUN chmod +x start.sh entrypoint.sh tailscale-start.sh
+RUN chmod +x start.sh start-robust.sh entrypoint.sh tailscale-start.sh
 RUN chown -R inventory:inventory /app
 
 # Expose ports
@@ -52,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health && \
       wget --no-verbose --tries=1 --spider http://localhost:5001/api/inventory/health || exit 1
 
-CMD ["/bin/bash", "-c", "echo '🚀 Starting WC Ducomb services...' && mkdir -p logs && export API_PORT=5001 && python3 api/inventory_lookup.py & sleep 10 && export PORT=3000 && npm start & wait"]
+CMD ["/bin/bash", "-c", "cd /app && python3 api/inventory_lookup.py > logs/api.log 2>&1 & sleep 10 && npm start"]

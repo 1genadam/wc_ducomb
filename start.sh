@@ -24,8 +24,8 @@ trap cleanup SIGTERM SIGINT
 mkdir -p logs
 
 # Start Python API backend
-echo "🐍 Starting Python API backend on port 5000..."
-python3 api/inventory_lookup.py > logs/api.log 2>&1 &
+echo "🐍 Starting Python API backend on port ${API_PORT:-5001}..."
+API_PORT=${API_PORT:-5001} python3 api/inventory_lookup.py > logs/api.log 2>&1 &
 PYTHON_PID=$!
 
 # Wait a moment for Python backend to start
