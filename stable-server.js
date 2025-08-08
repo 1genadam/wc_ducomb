@@ -81,7 +81,7 @@ app.post('/api/inventory/lookup', async (req, res) => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(req.body),
-            timeout: 60000 // 60 second timeout
+            timeout: 120000 // 2 minute timeout to match P5250 response times
         });
 
         if (!response.ok) {

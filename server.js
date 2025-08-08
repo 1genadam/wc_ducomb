@@ -27,8 +27,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', createProxyMiddleware({
     target: API_BASE_URL,
     changeOrigin: true,
-    timeout: 60000, // 60 second timeout
-    proxyTimeout: 60000,
+    timeout: 120000, // 2 minute timeout to match P5250 response times
+    proxyTimeout: 120000, // 2 minute proxy timeout
+    proxyTimeoutResponse: false, // Don't send response on timeout, let onError handle it
     onError: (err, req, res) => {
         console.error('Proxy error:', err.message);
         res.status(503).json({
