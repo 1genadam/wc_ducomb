@@ -53,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health && \
       wget --no-verbose --tries=1 --spider http://localhost:5001/api/inventory/health || exit 1
 
-CMD ["/bin/bash", "-c", "./start.sh"]
+CMD ["/bin/bash", "/app/start.sh"]
