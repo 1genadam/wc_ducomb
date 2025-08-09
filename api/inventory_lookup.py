@@ -269,23 +269,49 @@ class InventoryLookupService:
             return False
     
     def login_sequence(self):
-        """Handle complete login sequence with fixed credential handling"""
+        """Handle complete login sequence with proper timing and field navigation"""
         try:
-            # Use the new login method from our custom P5250 client
-            log_command("P5250_LOGIN_START", f"Starting login sequence for user: {USER}")
-            logger.info(f"Starting corrected login sequence for user: {USER}")
+            # Get initial screen with adaptive timing
+            logger.info("Waiting for initial login screen...")
+            self.adaptive_sleep(4)  # Use adaptive timing
+            screen = self.client.getScreen()
             
-            # Use the proper login method that handles credentials correctly
-            login_success = self.client.login(USER, PASSWORD)
+            if "User" not in screen and "Sign On" not in screen:
+                logger.warning("No clear login screen detected, proceeding anyway")
             
-            if not login_success:
-                log_command("P5250_LOGIN_FAILED", "Login credentials rejected")
-                logger.error("Login sequence failed - credentials rejected")
-                return False
+            # Clear the screen first to ensure clean state
+            log_command("P5250_CLEAR", "Clearing screen for clean login")
+            self.client.clearScreen()
+            self.adaptive_sleep(1)
             
-            log_command("P5250_LOGIN_SUCCESS", "Login credentials accepted")
-            logger.info("Login sequence completed successfully")
-            self.adaptive_sleep(3)  # Brief pause for system processing
+            # Enter credentials with improved timing and field handling
+            log_command("P5250_LOGIN", f"Entering credentials for user: {USER}")
+            logger.info("Entering login credentials with improved sequence")
+            
+            # Move to first input field and enter username
+            log_command("P5250_CURSOR", "Moving to first input field")
+            self.client.moveToFirstInputField()
+            self.adaptive_sleep(0.5)  # Small delay for cursor positioning
+            
+            log_command("P5250_INPUT", f"Sending username: {USER}")
+            self.client.sendText(USER)
+            self.adaptive_sleep(0.5)  # Allow field to process input
+            
+            # Tab to password field with extended delay
+            log_command("P5250_TAB", "Moving to password field")
+            self.client.sendTab()
+            self.adaptive_sleep(1.0)  # Longer delay for field navigation
+            
+            # Enter password
+            log_command("P5250_INPUT", "Sending password: [REDACTED]")
+            self.client.sendText(PASSWORD)
+            self.adaptive_sleep(0.5)  # Allow password field to process
+            
+            # Submit the login form
+            log_command("P5250_ENTER", "Submitting login credentials")
+            self.client.sendEnter()
+            logger.info("Credentials sent, waiting for authentication...")
+            self.adaptive_sleep(6)  # Extended wait for authentication processing
             
             # Handle post-login sequence with more steps and better timing
             for step in range(10):  # Increased from 5 to 10 steps
