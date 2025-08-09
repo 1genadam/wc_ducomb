@@ -269,32 +269,23 @@ class InventoryLookupService:
             return False
     
     def login_sequence(self):
-        """Handle complete login sequence with adaptive timing"""
+        """Handle complete login sequence with fixed credential handling"""
         try:
-            # Get initial screen with adaptive timing
-            logger.info("Waiting for initial login screen...")
-            self.adaptive_sleep(4)  # Use adaptive timing
-            screen = self.client.getScreen()
+            # Use the new login method from our custom P5250 client
+            log_command("P5250_LOGIN_START", f"Starting login sequence for user: {USER}")
+            logger.info(f"Starting corrected login sequence for user: {USER}")
             
-            if "User" not in screen:
-                logger.error("No login screen detected")
+            # Use the proper login method that handles credentials correctly
+            login_success = self.client.login(USER, PASSWORD)
+            
+            if not login_success:
+                log_command("P5250_LOGIN_FAILED", "Login credentials rejected")
+                logger.error("Login sequence failed - credentials rejected")
                 return False
             
-            # Enter credentials
-            log_command("P5250_LOGIN", f"Entering credentials for user: {USER}")
-            logger.info("Entering login credentials")
-            log_command("P5250_CURSOR", "Moving to first input field")
-            self.client.moveToFirstInputField()
-            log_command("P5250_INPUT", f"Sending username: {USER}")
-            self.client.sendText(USER)
-            log_command("P5250_TAB", "Sending tab to password field")
-            self.client.sendTab()
-            log_command("P5250_INPUT", "Sending password: [REDACTED]")
-            self.client.sendText(PASSWORD)
-            log_command("P5250_ENTER", "Sending Enter key to submit login")
-            self.client.sendEnter()
-            logger.info("Credentials sent, waiting for response...")
-            self.adaptive_sleep(5)  # Use adaptive timing for network processing
+            log_command("P5250_LOGIN_SUCCESS", "Login credentials accepted")
+            logger.info("Login sequence completed successfully")
+            self.adaptive_sleep(3)  # Brief pause for system processing
             
             # Handle post-login sequence with more steps and better timing
             for step in range(10):  # Increased from 5 to 10 steps

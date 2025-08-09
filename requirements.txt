@@ -1,8 +1,8 @@
 # WC Ducomb Inventory Lookup API Requirements
 # Production-ready Python dependencies for 5250 protocol automation
 
-# Core 5250 Protocol Library
-p5250==0.1.0
+# Custom 5250 Protocol Library (implemented in api/p5250.py)
+# No external p5250 dependency needed
 
 # Web Framework and API
 Flask==3.1.0
