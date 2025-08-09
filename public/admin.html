@@ -39,6 +39,23 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+        
+        .command-log {
+            background: #1a1a1a;
+            color: #00ff41;
+            max-height: 250px;
+            overflow-y: auto;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        
+        .debug-info {
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -178,8 +195,32 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Quick Test:</label>
+                            <div class="flex flex-wrap gap-2">
+                                <button class="quick-sku-btn bg-gray-100 hover:bg-blue-100 px-3 py-1 rounded text-sm" data-sku="DGE037700">DGE037700</button>
+                                <button class="quick-sku-btn bg-gray-100 hover:bg-blue-100 px-3 py-1 rounded text-sm" data-sku="DGE037592">DGE037592</button>
+                                <button class="quick-sku-btn bg-gray-100 hover:bg-blue-100 px-3 py-1 rounded text-sm" data-sku="LOV224006">LOV224006</button>
+                                <button class="quick-sku-btn bg-gray-100 hover:bg-blue-100 px-3 py-1 rounded text-sm" data-sku="BLO150197">BLO150197</button>
+                            </div>
+                        </div>
+                        
                         <div id="test-result" class="bg-gray-50 rounded-lg p-4 min-h-[200px] font-mono text-sm overflow-auto">
                             <p class="text-gray-500">Enter a SKU and click Test to see results...</p>
+                        </div>
+                        
+                        <!-- Command Execution Log -->
+                        <div class="mt-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-md font-semibold">Command Execution Log</h4>
+                                <button id="clear-command-log" class="text-xs text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-trash mr-1"></i>Clear
+                                </button>
+                            </div>
+                            <div id="command-log" class="command-log log-entry">
+                                <p class="text-green-400">WC Ducomb Production Admin Console Ready</p>
+                                <p class="text-yellow-400">[INFO] All commands executed against production API</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -317,8 +358,24 @@
                     if (e.key === 'Enter') this.testSKULookup();
                 });
 
+                // Quick SKU buttons
+                document.querySelectorAll('.quick-sku-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const sku = e.target.dataset.sku;
+                        document.getElementById('test-sku').value = sku;
+                        this.testSKULookup();
+                    });
+                });
+
+                // Command log management
+                document.getElementById('clear-command-log').addEventListener('click', () => this.clearCommandLog());
+
                 // Cache management
                 document.getElementById('clear-cache').addEventListener('click', () => this.clearCache());
+                
+                // Initialize command logging
+                this.logCommand('Production Admin Dashboard initialized');
+                this.logCommand('All API calls will be logged with timestamps and response times');
             }
 
             startAutoRefresh() {
@@ -343,9 +400,14 @@
             }
 
             async loadSystemStatus() {
+                this.logCommand('🔍 Loading system status...');
                 try {
+                    const startTime = Date.now();
                     const response = await fetch(`${this.apiBase}/status`);
+                    const responseTime = Date.now() - startTime;
                     const data = await response.json();
+
+                    this.logCommand(`📊 System status loaded (${responseTime}ms) - IBM i: ${data.connected ? 'Connected' : 'Offline'}`);
 
                     // Update status indicators
                     this.updateStatusIndicator('system-status', data.available ? 'Online' : 'Offline', data.available);
@@ -359,8 +421,14 @@
                     this.updateHealthIndicator('p5250-health', data.available);
                     this.updateHealthIndicator('ibm-health', data.connected);
                     this.updateHealthIndicator('redis-health', data.redis_available);
+                    
+                    // Alert if IBM i is disconnected
+                    if (!data.connected) {
+                        this.logCommand('🚨 ALERT: IBM i connection is offline - P5250 authentication may be required');
+                    }
 
                 } catch (error) {
+                    this.logCommand(`❌ System status check failed: ${error.message}`);
                     console.error('Failed to load system status:', error);
                     this.updateStatusIndicator('system-status', 'Error', false);
                 }
@@ -451,11 +519,13 @@
                 const sku = skuInput.value.trim();
 
                 if (!sku) {
+                    this.logCommand('❌ No SKU provided for lookup test');
                     resultDiv.innerHTML = '<p class="text-red-500">Please enter a SKU</p>';
                     return;
                 }
 
                 resultDiv.innerHTML = '<p class="text-blue-500">Testing SKU lookup...</p>';
+                this.logCommand(`🔍 Testing SKU lookup: ${sku}`);
 
                 try {
                     const startTime = Date.now();
@@ -467,6 +537,8 @@
 
                     const responseTime = Date.now() - startTime;
                     const data = await response.json();
+                    
+                    this.logCommand(`📊 API Response: ${response.status} (${responseTime}ms)`);
 
                     if (data.found) {
                         resultDiv.innerHTML = `
@@ -482,13 +554,20 @@
                                 <div><strong>On B/O:</strong> ${data.on_back_order || 0}</div>
                                 <div class="text-xs text-gray-500 mt-2">Retrieved: ${data.timestamp}</div>
                             </div>
+                            ${data.raw_screen ? `<details class="mt-3"><summary class="text-xs cursor-pointer">Raw Screen Data</summary><pre class="text-xs bg-gray-800 text-green-400 p-2 rounded mt-1 overflow-auto max-h-32">${data.raw_screen}</pre></details>` : ''}
                         `;
+                        this.logCommand(`✅ SKU ${sku} found: ${data.description} (${data.on_hand || 0} available)`);
                     } else {
                         resultDiv.innerHTML = `
                             <div class="text-yellow-600 font-bold mb-2">⚠️ NOT FOUND (${responseTime}ms)</div>
                             <p>SKU ${sku} was not found in the inventory system.</p>
                             ${data.error ? `<p class="text-red-500 mt-2">Error: ${data.error}</p>` : ''}
+                            ${data.raw_screen ? `<details class="mt-3"><summary class="text-xs cursor-pointer">Raw Screen Data</summary><pre class="text-xs bg-gray-800 text-green-400 p-2 rounded mt-1 overflow-auto max-h-32">${data.raw_screen}</pre></details>` : ''}
                         `;
+                        this.logCommand(`⚠️ SKU ${sku} not found (${responseTime}ms)`);
+                        if (data.raw_screen && data.raw_screen.includes('Sign On')) {
+                            this.logCommand('🚨 ALERT: P5250 session stuck at login screen - authentication issue detected');
+                        }
                     }
 
                 } catch (error) {
@@ -496,7 +575,27 @@
                         <div class="text-red-600 font-bold mb-2">❌ ERROR</div>
                         <p>Failed to lookup SKU: ${error.message}</p>
                     `;
+                    this.logCommand(`❌ SKU lookup failed: ${error.message}`);
                 }
+            }
+
+            logCommand(message) {
+                const logDiv = document.getElementById('command-log');
+                if (!logDiv) return;
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('p');
+                logEntry.innerHTML = `<span class="text-blue-400">[${timestamp}]</span> ${message}`;
+                logDiv.appendChild(logEntry);
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+
+            clearCommandLog() {
+                const logDiv = document.getElementById('command-log');
+                if (!logDiv) return;
+                
+                logDiv.innerHTML = '<p class="text-green-400">Command log cleared</p>';
+                this.logCommand('🗑️ Command log cleared');
             }
 
             async clearCache() {

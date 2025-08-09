@@ -28,7 +28,7 @@ app.get('/local', (req, res) => {
 });
 
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    res.sendFile(path.join(__dirname, 'public', 'local-admin.html'));
 });
 
 // Simple API proxy for chat endpoint
