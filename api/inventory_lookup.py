@@ -291,17 +291,53 @@ class InventoryLookupService:
             # Move to first input field and enter username
             log_command("P5250_CURSOR", "Moving to first input field")
             self.client.moveToFirstInputField()
-            self.adaptive_sleep(0.5)  # Small delay for cursor positioning
+            self.adaptive_sleep(0.8)  # Increased delay for internet connections
+            
+            # Alternative: Try coordinate-based positioning for username
+            try:
+                # Common 5250 login screen coordinates for username field
+                # Usually around row 6-8, column 20-30
+                log_command("P5250_POSITION", "Attempting coordinate-based username positioning")
+                self.client.setCursorPosition(6, 20)  # Try typical login coordinates
+                self.adaptive_sleep(0.3)
+            except:
+                pass  # Fall back to moveToFirstInputField if coordinates fail
             
             log_command("P5250_INPUT", f"Sending username: {USER}")
             self.client.sendText(USER)
-            self.adaptive_sleep(0.5)  # Allow field to process input
+            self.adaptive_sleep(0.8)  # Increased processing time for username
             
-            # Tab to password field with extended delay
+            # Tab to password field with enhanced field verification
             log_command("P5250_TAB", "Moving to password field")
             self.client.sendTab()
-            self.adaptive_sleep(1.0)  # Longer delay for field navigation
+            self.adaptive_sleep(2.0)  # Extended delay for internet latency
             
+            # Verify field transition - send additional tabs if needed
+            for attempt in range(3):
+                self.adaptive_sleep(0.5)
+                try:
+                    # Check if we're in the right field by trying cursor position
+                    screen_check = self.client.getScreen()
+                    if "User" in screen_check and attempt < 2:
+                        log_command("P5250_TAB_RETRY", f"Field navigation retry {attempt + 1}")
+                        self.client.sendTab()
+                        self.adaptive_sleep(1.5)
+                    else:
+                        break
+                except:
+                    if attempt < 2:
+                        self.client.sendTab()
+                        self.adaptive_sleep(1.0)
+            
+            # Clear any potential field contamination before password entry
+            log_command("P5250_CLEAR_FIELD", "Clearing current field before password")
+            try:
+                # Try to clear current field in case of overwrite
+                self.client.sendText("")  # Clear with empty string
+                self.adaptive_sleep(0.3)
+            except:
+                pass
+                
             # Enter password
             log_command("P5250_INPUT", "Sending password: [REDACTED]")
             self.client.sendText(PASSWORD)
