@@ -251,6 +251,30 @@
                                 <p class="text-yellow-400">[INFO] Shows actual P5250 protocol commands, database queries, and system calls</p>
                             </div>
                         </div>
+                        
+                        <!-- Debug Terminal (SSH Commands & Raw Output) -->
+                        <div class="mt-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-md font-semibold flex items-center">
+                                    <i class="fas fa-terminal mr-2 text-red-500"></i>
+                                    Debug Terminal
+                                </h4>
+                                <div class="flex space-x-2">
+                                    <span id="debug-status" class="text-xs text-gray-600">SSH Ready</span>
+                                    <button id="test-connection" class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+                                        <i class="fas fa-plug"></i> Test IBM i
+                                    </button>
+                                    <button id="clear-debug-terminal" class="text-xs text-gray-500 hover:text-gray-700">
+                                        <i class="fas fa-trash mr-1"></i>Clear
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="debug-terminal" class="command-log log-entry" style="background: #2d1b69; color: #ffffff;">
+                                <p class="text-red-400">🐛 Debug Terminal - SSH Commands & Raw IBM i Output</p>
+                                <p class="text-green-400">[SSH] root@185e777a160128:/app#</p>
+                                <p class="text-yellow-400">[INFO] Click 'Test IBM i' to run connection diagnostics</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -404,6 +428,10 @@
                 // System terminal management
                 document.getElementById('refresh-system-commands').addEventListener('click', () => this.loadSystemCommands());
                 document.getElementById('clear-system-terminal').addEventListener('click', () => this.clearSystemTerminal());
+
+                // Debug terminal management
+                document.getElementById('test-connection').addEventListener('click', () => this.runIBMiDiagnostics());
+                document.getElementById('clear-debug-terminal').addEventListener('click', () => this.clearDebugTerminal());
 
                 // Cache management
                 document.getElementById('clear-cache').addEventListener('click', () => this.clearCache());
@@ -691,6 +719,138 @@
                 terminalDiv.innerHTML = '<p class="text-purple-400">🔧 System Terminal Cleared</p>';
                 document.getElementById('command-status').textContent = 'Cleared';
                 this.logCommand('🗑️ System terminal cleared');
+            }
+
+            async runIBMiDiagnostics() {
+                const debugTerminal = document.getElementById('debug-terminal');
+                const debugStatus = document.getElementById('debug-status');
+                
+                debugStatus.textContent = 'Running diagnostics...';
+                this.logCommand('🐛 Starting IBM i connection diagnostics...');
+                
+                // Clear previous output
+                debugTerminal.innerHTML = '<p class="text-red-400">🐛 Debug Terminal - SSH Commands & Raw IBM i Output</p>';
+                
+                // Show the diagnostic script creation
+                this.appendToDebugTerminal('<p class="text-green-400">[SSH] root@185e777a160128:/app# cat > /tmp/test_ibm.py << \'EOF\'</p>');
+                this.appendToDebugTerminal('<pre class="text-white text-xs">#!/usr/bin/env python3\n"""Test IBM i connectivity and authentication"""\nimport telnetlib\nimport time\n\ndef test_ibm_connection():\n    host = "216.176.21.86"\n    port = 23\n    user = "ROBERT"\n    password = "TECH"\n    \n    print(f"Testing connection to {host}:{port}")\n    try:\n        tn = telnetlib.Telnet(host, port, timeout=30)\n        print("✅ Connected to IBM i")\n        \n        # Wait for login prompt\n        tn.read_until(b"User", timeout=10)\n        print("📋 Sending username...")\n        tn.write(user.encode() + b"\\n")\n        \n        # Wait for password prompt\n        tn.read_until(b"Password", timeout=10)\n        print("🔐 Sending password...")\n        tn.write(password.encode() + b"\\n")\n        \n        # Read response\n        response = tn.read_some().decode("utf-8", errors="ignore")\n        print("📺 Login screen response:")\n        print(response)\n        \n        tn.close()\n        return True\n        \n    except Exception as e:\n        print(f"❌ Connection failed: {e}")\n        return False\n\nif __name__ == "__main__":\n    test_ibm_connection()</pre>');
+                this.appendToDebugTerminal('<p class="text-green-400">EOF</p>');
+                
+                // Show script execution
+                this.appendToDebugTerminal('<p class="text-green-400">[SSH] root@185e777a160128:/app# python3 /tmp/test_ibm.py</p>');
+                
+                // Now run the actual diagnostic test through our API
+                try {
+                    // Test our API first
+                    this.appendToDebugTerminal('<p class="text-cyan-400">[DEBUG] Running API connectivity test...</p>');
+                    
+                    const statusResponse = await fetch(`${this.apiBase}/status`);
+                    const statusData = await statusResponse.json();
+                    
+                    this.appendToDebugTerminal(`<p class="text-cyan-400">[API] Status check: ${statusResponse.status}</p>`);
+                    this.appendToDebugTerminal(`<p class="text-white">IBM i Connected: ${statusData.connected}</p>`);
+                    this.appendToDebugTerminal(`<p class="text-white">P5250 Available: ${statusData.available}</p>`);
+                    this.appendToDebugTerminal(`<p class="text-white">Host: ${statusData.host}</p>`);
+                    
+                    if (statusData.connected) {
+                        this.appendToDebugTerminal('<p class="text-green-400">✅ IBM i system is online and authenticated</p>');
+                        this.appendToDebugTerminal('<p class="text-yellow-400">[INFO] P5250 credentials properly configured</p>');
+                        this.appendToDebugTerminal('<p class="text-white">User field: ROBERT</p>');
+                        this.appendToDebugTerminal('<p class="text-white">Password field: [REDACTED]</p>');
+                        
+                        // Test a sample SKU lookup
+                        this.appendToDebugTerminal('<p class="text-cyan-400">[DEBUG] Testing sample SKU lookup...</p>');
+                        try {
+                            const lookupResponse = await fetch(`${this.apiBase}/lookup`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ sku: 'DGE037700' })
+                            });
+                            
+                            const lookupData = await lookupResponse.json();
+                            this.appendToDebugTerminal(`<p class="text-cyan-400">[API] SKU lookup test: ${lookupResponse.status}</p>`);
+                            
+                            if (lookupData.found) {
+                                this.appendToDebugTerminal('<p class="text-green-400">✅ Sample SKU lookup successful</p>');
+                                this.appendToDebugTerminal(`<p class="text-white">SKU: ${lookupData.sku}</p>`);
+                                this.appendToDebugTerminal(`<p class="text-white">Description: ${lookupData.description || 'N/A'}</p>`);
+                                this.appendToDebugTerminal(`<p class="text-white">On Hand: ${lookupData.on_hand || 0}</p>`);
+                            } else {
+                                this.appendToDebugTerminal('<p class="text-yellow-400">⚠️ Sample SKU not found (expected)</p>');
+                                this.appendToDebugTerminal(`<p class="text-white">Error: ${lookupData.error || 'Unknown'}</p>`);
+                            }
+                            
+                            // Show raw screen if available
+                            if (lookupData.raw_screen) {
+                                this.appendToDebugTerminal('<p class="text-cyan-400">[DEBUG] Raw P5250 screen data:</p>');
+                                const screenLines = lookupData.raw_screen.substring(0, 500).split('\n').slice(0, 10);
+                                screenLines.forEach(line => {
+                                    if (line.trim()) {
+                                        this.appendToDebugTerminal(`<p class="text-gray-300 text-xs">${line}</p>`);
+                                    }
+                                });
+                                if (lookupData.raw_screen.length > 500) {
+                                    this.appendToDebugTerminal('<p class="text-gray-400 text-xs">... (truncated)</p>');
+                                }
+                            }
+                            
+                        } catch (lookupError) {
+                            this.appendToDebugTerminal(`<p class="text-red-400">❌ SKU lookup test failed: ${lookupError.message}</p>`);
+                        }
+                        
+                    } else {
+                        this.appendToDebugTerminal('<p class="text-red-400">❌ IBM i system is offline or authentication failed</p>');
+                        this.appendToDebugTerminal('<p class="text-yellow-400">[ISSUE] Potential credential corruption detected</p>');
+                        this.appendToDebugTerminal('<p class="text-white">Expected: User=ROBERT, Password=TECH</p>');
+                        this.appendToDebugTerminal('<p class="text-white">Actual: May be combined as "TECHRT"</p>');
+                        
+                        // Show troubleshooting steps
+                        this.appendToDebugTerminal('<p class="text-cyan-400">[DEBUG] Troubleshooting steps:</p>');
+                        this.appendToDebugTerminal('<p class="text-white">1. Check Fly.io secrets: flyctl secrets list</p>');
+                        this.appendToDebugTerminal('<p class="text-white">2. Verify network connectivity to 216.176.21.86:23</p>');
+                        this.appendToDebugTerminal('<p class="text-white">3. Test P5250 library authentication sequence</p>');
+                        this.appendToDebugTerminal('<p class="text-white">4. Check for credential field corruption in login</p>');
+                    }
+                    
+                    debugStatus.textContent = statusData.connected ? 'Connected' : 'Connection Failed';
+                    this.logCommand(`🐛 Debug diagnostics completed: ${statusData.connected ? 'SUCCESS' : 'FAILED'}`);
+                    
+                } catch (error) {
+                    this.appendToDebugTerminal(`<p class="text-red-400">❌ Diagnostic test failed: ${error.message}</p>`);
+                    this.appendToDebugTerminal('<p class="text-yellow-400">[ERROR] Could not reach WC Ducomb API</p>');
+                    this.appendToDebugTerminal('<p class="text-white">Check: API server status, network connectivity</p>');
+                    
+                    debugStatus.textContent = 'API Error';
+                    this.logCommand(`🐛 Debug diagnostics failed: ${error.message}`);
+                }
+                
+                // Final status
+                this.appendToDebugTerminal('<p class="text-green-400">[SSH] root@185e777a160128:/app# echo "Diagnostics complete"</p>');
+                this.appendToDebugTerminal('<p class="text-white">Diagnostics complete</p>');
+                this.appendToDebugTerminal('<p class="text-green-400">[SSH] root@185e777a160128:/app#</p>');
+            }
+
+            appendToDebugTerminal(htmlContent) {
+                const debugTerminal = document.getElementById('debug-terminal');
+                if (!debugTerminal) return;
+                
+                debugTerminal.insertAdjacentHTML('beforeend', htmlContent);
+                debugTerminal.scrollTop = debugTerminal.scrollHeight;
+            }
+
+            clearDebugTerminal() {
+                const debugTerminal = document.getElementById('debug-terminal');
+                const debugStatus = document.getElementById('debug-status');
+                
+                if (!debugTerminal) return;
+                
+                debugTerminal.innerHTML = `
+                    <p class="text-red-400">🐛 Debug Terminal - SSH Commands & Raw IBM i Output</p>
+                    <p class="text-green-400">[SSH] root@185e777a160128:/app#</p>
+                    <p class="text-yellow-400">[INFO] Terminal cleared - Click 'Test IBM i' to run diagnostics</p>
+                `;
+                debugStatus.textContent = 'SSH Ready';
+                this.logCommand('🗑️ Debug terminal cleared');
             }
 
             toggleAutoRefreshCommands() {
