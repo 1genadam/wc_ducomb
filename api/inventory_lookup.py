@@ -812,12 +812,26 @@ if __name__ == '__main__':
     print(f"🔗 API running at http://localhost:{api_port}")
     print(f"📊 Admin panel: http://localhost:{api_port}/admin")
     
+    # Initialize the service first
+    print("🔧 Initializing inventory service...")
+    
     # Test connection on startup
     if P5250_AVAILABLE:
         print("🔌 Testing IBM i connection...")
-        if inventory_service.connect_with_retry(max_retries=1):
-            print("✅ Successfully connected to IBM i system")
-        else:
-            print("⚠️ Could not connect to IBM i - running in offline mode")
+        try:
+            if inventory_service.connect_with_retry(max_retries=1):
+                print("✅ Successfully connected to IBM i system")
+            else:
+                print("⚠️ Could not connect to IBM i - running in offline mode")
+        except Exception as e:
+            print(f"⚠️ Connection test failed: {e} - running in offline mode")
+    else:
+        print("⚠️ P5250 module not available - running in demo mode")
     
-    app.run(host='0.0.0.0', port=api_port, debug=False, threaded=True)
+    print(f"🎯 Starting Flask app on 0.0.0.0:{api_port}")
+    try:
+        app.run(host='0.0.0.0', port=api_port, debug=False, threaded=True)
+    except Exception as e:
+        print(f"❌ Failed to start Flask app: {e}")
+        import traceback
+        traceback.print_exc()
