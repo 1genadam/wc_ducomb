@@ -128,6 +128,26 @@ def cache_set(sku, data, ttl=1800):  # 30 minutes TTL
     except Exception as e:
         logger.error(f"Cache set error: {e}")
 
+# Command execution logging for debugging
+command_log = []
+command_log_lock = Lock()
+
+def log_command(command, details=None, result=None, duration=None):
+    """Log system commands for debugging"""
+    with command_log_lock:
+        entry = {
+            'timestamp': datetime.now().isoformat(),
+            'command': command,
+            'details': details,
+            'result': result,
+            'duration': duration
+        }
+        command_log.append(entry)
+        # Keep only last 100 entries
+        if len(command_log) > 100:
+            command_log.pop(0)
+        logger.info(f"CMD: {command} | {details} | Result: {result} | Duration: {duration}")
+
 class InventoryLookupService:
     """Production-ready service for inventory lookups via 5250 protocol"""
     
@@ -166,9 +186,12 @@ class InventoryLookupService:
         with self.connection_lock:
             for attempt in range(max_retries):
                 try:
+                    start_time = time.time()
+                    log_command("P5250_CONNECT", f"Connecting to {IBM_HOST}:{IBM_PORT} (attempt {attempt + 1})")
                     logger.info(f"Connection attempt {attempt + 1} to {IBM_HOST}:{IBM_PORT}")
                     
                     # Create new client with optimized timeouts for internet connections
+                    log_command("P5250_CONFIG", f"Model: 3279-2, Timeout: 60s, TLS: disabled")
                     logger.info("Using optimized P5250Client configuration for internet latency")
                     self.client = P5250Client(
                         hostName=IBM_HOST,
@@ -258,11 +281,17 @@ class InventoryLookupService:
                 return False
             
             # Enter credentials
+            log_command("P5250_LOGIN", f"Entering credentials for user: {USER}")
             logger.info("Entering login credentials")
+            log_command("P5250_CURSOR", "Moving to first input field")
             self.client.moveToFirstInputField()
+            log_command("P5250_INPUT", f"Sending username: {USER}")
             self.client.sendText(USER)
+            log_command("P5250_TAB", "Sending tab to password field")
             self.client.sendTab()
+            log_command("P5250_INPUT", "Sending password: [REDACTED]")
             self.client.sendText(PASSWORD)
+            log_command("P5250_ENTER", "Sending Enter key to submit login")
             self.client.sendEnter()
             logger.info("Credentials sent, waiting for response...")
             self.adaptive_sleep(5)  # Use adaptive timing for network processing
@@ -281,7 +310,9 @@ class InventoryLookupService:
                     continue
                 
                 elif "BEGIN AN A+ SESSION" in screen_upper and "BASE" in screen_upper:
+                    log_command("P5250_MENU", "Found Infor base selection screen")
                     logger.info("Confirming Infor base selection")
+                    log_command("P5250_ENTER", "Confirming Infor base selection")
                     self.client.sendEnter()
                     time.sleep(4)  # Increased timing for menu loading
                     continue
@@ -710,11 +741,39 @@ def get_recent_lookups():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/inventory/commands', methods=['GET'])
+def get_command_log():
+    """Get real-time command execution log"""
+    with command_log_lock:
+        # Return last 50 commands with most recent first
+        recent_commands = list(reversed(command_log[-50:]))
+        
+        return jsonify({
+            'commands': recent_commands,
+            'total_count': len(command_log),
+            'timestamp': datetime.now().isoformat()
+        })
+
+@app.route('/api/inventory/commands/clear', methods=['POST'])
+def clear_command_log():
+    """Clear command execution log"""
+    with command_log_lock:
+        command_log.clear()
+        log_command("SYSTEM", "Command log cleared by admin")
+        
+    return jsonify({
+        'success': True,
+        'message': 'Command log cleared',
+        'timestamp': datetime.now().isoformat()
+    })
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """Enhanced chat endpoint for inventory queries"""
     data = request.json
     message = data.get('message', '').strip()
+    
+    log_command("API_CHAT", f"Processing message: {message[:50]}...")
     
     response = {
         "success": True,

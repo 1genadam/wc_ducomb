@@ -213,13 +213,42 @@
                         <div class="mt-6">
                             <div class="flex items-center justify-between mb-3">
                                 <h4 class="text-md font-semibold">Command Execution Log</h4>
-                                <button id="clear-command-log" class="text-xs text-gray-500 hover:text-gray-700">
-                                    <i class="fas fa-trash mr-1"></i>Clear
-                                </button>
+                                <div class="flex space-x-2">
+                                    <button id="auto-refresh-commands" class="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600" title="Auto-refresh commands">
+                                        <i class="fas fa-sync-alt"></i> Auto
+                                    </button>
+                                    <button id="clear-command-log" class="text-xs text-gray-500 hover:text-gray-700">
+                                        <i class="fas fa-trash mr-1"></i>Clear
+                                    </button>
+                                </div>
                             </div>
                             <div id="command-log" class="command-log log-entry">
                                 <p class="text-green-400">WC Ducomb Production Admin Console Ready</p>
                                 <p class="text-yellow-400">[INFO] All commands executed against production API</p>
+                            </div>
+                        </div>
+                        
+                        <!-- System Terminal (Live Backend Commands) -->
+                        <div class="mt-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-md font-semibold flex items-center">
+                                    <i class="fas fa-code mr-2 text-purple-500"></i>
+                                    System Terminal
+                                </h4>
+                                <div class="flex space-x-2">
+                                    <span id="command-status" class="text-xs text-gray-600">Ready</span>
+                                    <button id="refresh-system-commands" class="text-xs bg-purple-500 text-white px-2 py-1 rounded hover:bg-purple-600">
+                                        <i class="fas fa-sync-alt"></i> Refresh
+                                    </button>
+                                    <button id="clear-system-terminal" class="text-xs text-gray-500 hover:text-gray-700">
+                                        <i class="fas fa-trash mr-1"></i>Clear
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="system-terminal" class="command-log log-entry" style="background: #0f0f23; color: #00ff41;">
+                                <p class="text-purple-400">🔧 System Terminal - Live P5250 & Backend Commands</p>
+                                <p class="text-blue-400">[INFO] Real-time system commands will appear here</p>
+                                <p class="text-yellow-400">[INFO] Shows actual P5250 protocol commands, database queries, and system calls</p>
                             </div>
                         </div>
                     </div>
@@ -336,6 +365,7 @@
         class AdminDashboard {
             constructor() {
                 this.refreshInterval = null;
+                this.commandRefreshInterval = null;
                 this.apiBase = '/api/inventory';
                 this.init();
             }
@@ -369,6 +399,11 @@
 
                 // Command log management
                 document.getElementById('clear-command-log').addEventListener('click', () => this.clearCommandLog());
+                document.getElementById('auto-refresh-commands').addEventListener('click', () => this.toggleAutoRefreshCommands());
+                
+                // System terminal management
+                document.getElementById('refresh-system-commands').addEventListener('click', () => this.loadSystemCommands());
+                document.getElementById('clear-system-terminal').addEventListener('click', () => this.clearSystemTerminal());
 
                 // Cache management
                 document.getElementById('clear-cache').addEventListener('click', () => this.clearCache());
@@ -596,6 +631,95 @@
                 
                 logDiv.innerHTML = '<p class="text-green-400">Command log cleared</p>';
                 this.logCommand('🗑️ Command log cleared');
+            }
+
+            async loadSystemCommands() {
+                const terminalDiv = document.getElementById('system-terminal');
+                const statusDiv = document.getElementById('command-status');
+                
+                statusDiv.textContent = 'Loading...';
+                this.logCommand('🔧 Loading system commands from backend...');
+
+                try {
+                    const response = await fetch(`${this.apiBase}/commands`);
+                    const data = await response.json();
+                    
+                    if (data.commands && data.commands.length > 0) {
+                        let terminalContent = '<p class="text-purple-400">🔧 System Commands (Last 50)</p>';
+                        
+                        data.commands.forEach(cmd => {
+                            const timestamp = new Date(cmd.timestamp).toLocaleTimeString();
+                            const commandType = cmd.command || 'UNKNOWN';
+                            const details = cmd.details || '';
+                            const result = cmd.result || '';
+                            const duration = cmd.duration ? `(${cmd.duration}ms)` : '';
+                            
+                            // Color code different command types
+                            let color = 'text-green-400';
+                            if (commandType.startsWith('P5250_')) color = 'text-cyan-400';
+                            else if (commandType.startsWith('API_')) color = 'text-yellow-400';
+                            else if (commandType.startsWith('SQL_')) color = 'text-blue-400';
+                            else if (commandType.includes('ERROR')) color = 'text-red-400';
+                            
+                            terminalContent += `<p class="${color}">[${timestamp}] ${commandType}: ${details} ${result} ${duration}</p>`;
+                        });
+                        
+                        terminalDiv.innerHTML = terminalContent;
+                        statusDiv.textContent = `Loaded ${data.commands.length} commands`;
+                        this.logCommand(`✅ Loaded ${data.commands.length} system commands`);
+                        
+                        // Scroll to bottom
+                        terminalDiv.scrollTop = terminalDiv.scrollHeight;
+                        
+                    } else {
+                        terminalDiv.innerHTML = '<p class="text-yellow-400">No system commands found</p>';
+                        statusDiv.textContent = 'No commands';
+                        this.logCommand('⚠️ No system commands found');
+                    }
+                    
+                } catch (error) {
+                    terminalDiv.innerHTML = `<p class="text-red-400">Error loading system commands: ${error.message}</p>`;
+                    statusDiv.textContent = 'Error';
+                    this.logCommand(`❌ Failed to load system commands: ${error.message}`);
+                }
+            }
+
+            clearSystemTerminal() {
+                const terminalDiv = document.getElementById('system-terminal');
+                if (!terminalDiv) return;
+                
+                terminalDiv.innerHTML = '<p class="text-purple-400">🔧 System Terminal Cleared</p>';
+                document.getElementById('command-status').textContent = 'Cleared';
+                this.logCommand('🗑️ System terminal cleared');
+            }
+
+            toggleAutoRefreshCommands() {
+                // Implementation for auto-refresh toggle
+                const button = document.getElementById('auto-refresh-commands');
+                if (button.classList.contains('bg-blue-500')) {
+                    // Start auto-refresh
+                    button.classList.remove('bg-blue-500');
+                    button.classList.add('bg-green-500');
+                    button.innerHTML = '<i class="fas fa-pause"></i> Auto';
+                    
+                    this.commandRefreshInterval = setInterval(() => {
+                        this.loadSystemCommands();
+                    }, 5000); // Refresh every 5 seconds
+                    
+                    this.logCommand('▶️ Auto-refresh enabled for system commands (5s interval)');
+                } else {
+                    // Stop auto-refresh
+                    button.classList.remove('bg-green-500');
+                    button.classList.add('bg-blue-500');
+                    button.innerHTML = '<i class="fas fa-sync-alt"></i> Auto';
+                    
+                    if (this.commandRefreshInterval) {
+                        clearInterval(this.commandRefreshInterval);
+                        this.commandRefreshInterval = null;
+                    }
+                    
+                    this.logCommand('⏸️ Auto-refresh disabled for system commands');
+                }
             }
 
             async clearCache() {
