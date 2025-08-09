@@ -295,39 +295,40 @@ class InventoryLookupService:
             
             # Alternative: Try coordinate-based positioning for username
             try:
-                # Common 5250 login screen coordinates for username field
-                # Usually around row 6-8, column 20-30
-                log_command("P5250_POSITION", "Attempting coordinate-based username positioning")
-                self.client.setCursorPosition(6, 20)  # Try typical login coordinates
+                # Based on telnet test: username appears at position [6;53H
+                log_command("P5250_POSITION", "Using exact coordinates from telnet analysis")
+                self.client.moveTo(6, 53)  # Exact position from telnet output
                 self.adaptive_sleep(0.3)
-            except:
+                log_command("P5250_POSITION_SUCCESS", "Positioned cursor at exact username coordinates")
+            except Exception as e:
+                log_command("P5250_POSITION_FALLBACK", f"Coordinate positioning failed: {e}")
                 pass  # Fall back to moveToFirstInputField if coordinates fail
             
             log_command("P5250_INPUT", f"Sending username: {USER}")
             self.client.sendText(USER)
             self.adaptive_sleep(0.8)  # Increased processing time for username
             
-            # Tab to password field with enhanced field verification
-            log_command("P5250_TAB", "Moving to password field")
-            self.client.sendTab()
-            self.adaptive_sleep(2.0)  # Extended delay for internet latency
+            # Move to password field using cursor positioning (like 5250 emulator)
+            log_command("P5250_CURSOR_DOWN", "Moving to password field with cursor down")
             
-            # Verify field transition - send additional tabs if needed
-            for attempt in range(3):
-                self.adaptive_sleep(0.5)
-                try:
-                    # Check if we're in the right field by trying cursor position
-                    screen_check = self.client.getScreen()
-                    if "User" in screen_check and attempt < 2:
-                        log_command("P5250_TAB_RETRY", f"Field navigation retry {attempt + 1}")
-                        self.client.sendTab()
-                        self.adaptive_sleep(1.5)
-                    else:
-                        break
-                except:
-                    if attempt < 2:
-                        self.client.sendTab()
-                        self.adaptive_sleep(1.0)
+            # Method 1: Direct cursor down movement (most reliable - like 5250 emulator)
+            self.client.moveCursorDown()
+            self.adaptive_sleep(0.5)
+            log_command("P5250_CURSOR_SUCCESS", "Cursor down movement completed")
+            
+            # Verify cursor position by checking screen content
+            try:
+                screen_check = self.client.getScreen()
+                if "Password" in screen_check:
+                    log_command("P5250_FIELD_VERIFY", "Confirmed cursor is at password field")
+                else:
+                    # If not at password field, try alternative positioning
+                    log_command("P5250_ALT_POSITION", "Trying alternative password field positioning")
+                    # Try common 5250 password field coordinates
+                    self.client.moveTo(7, 53)  # Based on telnet output showing position 7;53
+                    self.adaptive_sleep(0.5)
+            except Exception as e:
+                log_command("P5250_POSITION_WARNING", f"Field verification failed: {e}")
             
             # Clear any potential field contamination before password entry
             log_command("P5250_CLEAR_FIELD", "Clearing current field before password")
